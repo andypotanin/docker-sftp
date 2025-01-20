@@ -104,12 +104,17 @@ ENV PATH $PATH:/usr/local/google-cloud-sdk/bin
 # Copy application files
 COPY --chown=udx:udx . /opt/sources/rabbitci/rabbit-ssh/
 
-# Copy service configuration and set permissions
-COPY --chown=udx:udx src/configs/services.yml /etc/worker/services.yml
-RUN chmod 644 /etc/worker/services.yml && \
-    chown udx:udx /etc/worker/services.yml && \
-    mkdir -p /etc/worker/logs && \
-    chown -R udx:udx /etc/worker/logs
+# Set up worker configuration directories and permissions
+RUN mkdir -p /etc/worker/logs /etc/worker/configs && \
+    chown -R udx:udx /etc/worker && \
+    chmod -R 755 /etc/worker
+
+# Copy and verify service configuration
+COPY --chown=udx:udx src/configs/services.yml /etc/worker/configs/services.yml
+RUN ln -sf /etc/worker/configs/services.yml /etc/worker/services.yml && \
+    chmod 644 /etc/worker/configs/services.yml && \
+    echo "Verifying worker configuration..." && \
+    /usr/local/bin/worker --debug validate /etc/worker/services.yml || echo "Warning: Service validation failed"
 
 # Set up worker configuration directories
 RUN mkdir -p /home/udx/.cd/configs /etc/worker && \
