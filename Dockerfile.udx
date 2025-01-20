@@ -61,22 +61,20 @@ RUN mkdir -p \
     chown -R udx:udx /home/udx && \
     chmod -R 755 /home/udx/.cd/configs
 
-# Set up SSH directories and permissions
-RUN rm -rf /etc/ssh/* && \
+# Set up SSH configuration
+COPY --chown=root:root static/etc/ssh/ /etc/ssh/
+RUN chmod 755 /etc/ssh && \
+    chmod 644 /etc/ssh/sshd_config && \
     mkdir -p /etc/ssh/authorized_keys.d /run/sshd && \
-    chmod 755 /etc/ssh && \
     chmod 755 /etc/ssh/authorized_keys.d && \
     chmod 755 /run/sshd && \
     chown -R root:root /etc/ssh && \
-    chown -R node:node /home/node && \
-    chown -R node:node /opt/sources/rabbitci && \
-    chown -R node:node /var/log && \
+    chown -R udx:udx /home/udx && \
+    chown -R udx:udx /opt/sources/rabbitci && \
+    chown -R udx:udx /var/log && \
     chmod 777 /etc/ssh/authorized_keys.d
-
-# Copy SSH configuration and worker configs
-COPY --chown=root:root static/etc/ssh/ /etc/ssh/
-COPY --chown=node:node src/configs/worker.yml /home/node/.cd/configs/worker.yml
-COPY --chown=node:node src/configs/services.yml /etc/worker/services.yml
+COPY --chown=udx:udx src/configs/worker.yml /home/udx/.cd/configs/worker.yml
+COPY --chown=udx:udx src/configs/services.yml /etc/worker/services.yml
 
 # Fix SSH config permissions
 RUN chmod 644 /etc/ssh/sshd_config
@@ -84,8 +82,8 @@ RUN chmod 644 /etc/ssh/sshd_config
 # Set up logging and permissions
 RUN touch /var/log/sshd.log /var/log/auth.log \
     && chmod 644 /var/log/sshd.log /var/log/auth.log \
-    && chown node:node /var/log/sshd.log \
-    && chown node:node /var/log/auth.log \
+    && chown udx:udx /var/log/sshd.log \
+    && chown udx:udx /var/log/auth.log \
     && chmod 755 /etc/ssh \
     && chmod 755 /etc/ssh/authorized_keys.d
 
@@ -96,7 +94,7 @@ RUN curl -L https://dl.k8s.io/release/v1.29.0/bin/linux/amd64/kubectl -o /usr/lo
 # Install Google Cloud SDK in /usr/local
 RUN curl -sSL https://sdk.cloud.google.com | bash -s -- --install-dir=/usr/local --disable-prompts \
     && /usr/local/google-cloud-sdk/bin/gcloud components install gke-gcloud-auth-plugin \
-    && chown -R node:node /usr/local/google-cloud-sdk
+    && chown -R udx:udx /usr/local/google-cloud-sdk
 ENV PATH $PATH:/usr/local/google-cloud-sdk/bin
 
 # Copy application files
@@ -112,26 +110,28 @@ RUN chmod +x /opt/sources/rabbitci/rabbit-ssh/bin/entrypoint.sh && \
 
 # Set permissions for npm
 RUN mkdir -p /usr/local/lib/node_modules \
-    && chown -R node:node /home/node/.npm \
-    && chmod -R 775 /home/node/.npm
+    && chown -R udx:udx /home/udx/.npm \
+    && chmod -R 775 /home/udx/.npm
 
 # Switch back to non-root user
-USER node
+USER udx
 
 # Add Google Cloud SDK to PATH
 ENV PATH $PATH:/usr/local/google-cloud-sdk/bin
 
 # Install dependencies with correct permissions
 USER root
-RUN mkdir -p /home/node/.npm && \
-    chown -R node:node /home/node/.npm && \
-    npm config set cache /home/node/.npm/_cacache && \
+RUN mkdir -p /home/udx/.npm /home/udx/.pm2/logs && \
+    chown -R udx:udx /home/udx/.npm && \
+    chown -R udx:udx /home/udx/.pm2 && \
+    chmod -R 755 /home/udx/.pm2 && \
+    npm config set cache /home/udx/.npm/_cacache && \
     npm install -g pm2 && \
     npm ci --only=production && \
-    chown -R node:node /opt/sources/rabbitci/rabbit-ssh/node_modules
+    chown -R udx:udx /opt/sources/rabbitci/rabbit-ssh/node_modules
 
-# Switch back to node user
-USER node
+# Switch back to udx user
+USER udx
 
 # Volume for SSH keys and logs
 VOLUME ["/etc/ssh/authorized_keys.d", "/var/log"]
