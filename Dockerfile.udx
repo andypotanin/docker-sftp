@@ -118,11 +118,15 @@ RUN mkdir -p /etc/worker/logs /etc/worker/configs && \
     chmod -R 755 /etc/worker
 
 # Copy and verify service configuration
-COPY --chown=udx:udx src/configs/services.yml /etc/worker/configs/services.yml
-RUN ln -sf /etc/worker/configs/services.yml /etc/worker/services.yml && \
-    chmod 644 /etc/worker/configs/services.yml && \
+COPY --chown=root:root src/configs/services.yml /etc/worker/services.yml
+RUN chmod 644 /etc/worker/services.yml && \
     echo "Verifying worker configuration..." && \
-    /usr/local/bin/worker --debug validate /etc/worker/services.yml || echo "Warning: Service validation failed"
+    /usr/local/bin/worker --debug validate /etc/worker/services.yml && \
+    echo "Worker configuration validated successfully" || {
+        echo "ERROR: Worker configuration validation failed"
+        cat /etc/worker/services.yml
+        exit 1
+    }
 
 # Set up worker configuration directories
 RUN mkdir -p /home/udx/.cd/configs /etc/worker && \

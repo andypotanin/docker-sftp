@@ -96,9 +96,20 @@ echo "Worker version: $(worker --version || echo 'version check failed')"
 # Check services configuration
 if [ ! -f "/etc/worker/services.yml" ]; then
     echo "Error: services.yml not found at /etc/worker/services.yml"
-    ls -l /etc/worker/ || echo "Worker config directory is empty or missing"
+    ls -la /etc/worker/ || echo "Worker config directory is empty or missing"
     exit 1
 fi
+
+# Verify services.yml permissions and content
+echo "Services configuration:"
+ls -la /etc/worker/services.yml
+cat /etc/worker/services.yml
+
+# Verify worker can read the configuration
+/usr/local/bin/worker validate /etc/worker/services.yml || {
+    echo "ERROR: Failed to validate services configuration"
+    exit 1
+}
 
 echo "Services configuration found:"
 cat /etc/worker/services.yml
