@@ -5,7 +5,6 @@
     "main": "bin/server.js",
     "scripts": {
         "start": "DEBUG=k8gate:*,api:*,auth:* node bin/server.js | tee -a /var/log/k8gate.log",
-        "start:events": "DEBUG=k8gate:events:*,firebase:* node bin/events.js | tee -a /var/log/k8gate-events.log",
         "test": "jest",
         "test:integration": "jest tests/ssh-integration.test.js",
         "lint": "eslint .",

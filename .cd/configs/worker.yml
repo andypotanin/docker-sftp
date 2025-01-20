@@ -53,11 +53,7 @@ config:
       script: "/opt/sources/rabbitci/rabbit-ssh/bin/server.js"
       max_memory_restart: "512M"
       
-    - name: "firebase-consume"
-      type: "node"
-      script: "/opt/sources/rabbitci/rabbit-ssh/bin/firebase.consume.js"
-      max_memory_restart: "512M"
-      enabled: "${SERVICE_ENABLE_FIREBASE}"
+    # Firebase consumer removed
 
   # Health Check Configuration
   health:
