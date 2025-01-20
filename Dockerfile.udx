@@ -46,17 +46,13 @@ COPY --chown=udx:udx static/etc/ssh/ /etc/ssh/
 COPY --chown=udx:udx src/configs/worker.yml /home/udx/.cd/configs/worker.yml
 COPY --chown=udx:udx src/configs/services.yml /etc/worker/services.yml
 
-# Install PM2 globally
-RUN npm install -g pm2
-
 # Create necessary directories and set permissions
 RUN mkdir -p /etc/ssh/authorized_keys.d && \
-    chmod 755 /etc/ssh/authorized_keys.d && \
     mkdir -p /var/log && \
     touch /var/log/k8gate.log /var/log/k8gate-events.log /var/log/auth.log && \
     chmod 644 /var/log/k8gate.log /var/log/k8gate-events.log /var/log/auth.log && \
-    mkdir -p /etc/ssh && \
-    chmod 755 /etc/ssh
+    chmod 755 /etc/ssh && \
+    chmod 755 /etc/ssh/authorized_keys.d
 
 # Set up logging and permissions
 RUN touch /var/log/k8gate.log /var/log/k8gate-events.log /var/log/auth.log \
@@ -76,9 +72,11 @@ RUN curl -sSL https://sdk.cloud.google.com | bash -s -- --install-dir=/usr/local
 # Copy application files
 COPY --chown=udx:udx . .
 
-# Copy and set permissions for entrypoint
+# Copy and set permissions for scripts
 COPY bin/entrypoint.sh /usr/local/bin/
-RUN chmod +x /usr/local/bin/entrypoint.sh
+COPY bin/setup.js /opt/app/bin/
+RUN chmod +x /usr/local/bin/entrypoint.sh && \
+    chmod +x /opt/app/bin/setup.js
 
 # Set permissions for executables and npm
 RUN mkdir -p /usr/local/lib/node_modules \

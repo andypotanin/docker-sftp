@@ -1,17 +1,24 @@
 #!/bin/bash
 set -e
 
+# generate fresh rsa key
+if [ ! -f "/etc/ssh/ssh_host_rsa_key" ]; then
+  ssh-keygen -f /etc/ssh/ssh_host_rsa_key -N '' -t rsa
+  chmod 0600 /etc/ssh/ssh_host_rsa_key
+fi
+
+# generate fresh dsa key
+if [ ! -f "/etc/ssh/ssh_host_dsa_key" ]; then
+  ssh-keygen -f /etc/ssh/ssh_host_dsa_key -N '' -t dsa
+  chmod 0600 /etc/ssh/ssh_host_dsa_key
+fi
+
+if [ -f "/etc/ssh/ssh_host_dsa_key" ]; then
+  chmod 0600 /etc/ssh/ssh_host_ecdsa_key
+fi
+
 # Load worker configuration
 source /usr/local/lib/worker_config.sh
-
-# Generate host keys if not present
-if [[ ! -f /etc/ssh/ssh_host_rsa_key ]]; then
-    ssh-keygen -t rsa -f /etc/ssh/ssh_host_rsa_key -N ''
-fi
-
-if [[ ! -f /etc/ssh/ssh_host_dsa_key ]]; then
-    ssh-keygen -t dsa -f /etc/ssh/ssh_host_dsa_key -N ''
-fi
 
 # Only setup Kubernetes if enabled
 if [ "${SERVICE_ENABLE_K8S}" != "false" ]; then
@@ -44,10 +51,11 @@ if [ "${SERVICE_ENABLE_K8S}" != "false" ]; then
 fi
 
 # Install dependencies
+cd /opt/app
 npm install google-gax
 npm install
 
-# Start services using PM2
+# Start services based on configuration
 if [ -f "/etc/worker/services.yml" ]; then
   echo "Starting services from worker configuration..."
   worker service start
@@ -56,12 +64,12 @@ else
   
   if [[ "${SERVICE_ENABLE_SSHD}" == "true" ]]; then
     echo "Starting SSH daemon..."
-    pm2 start sshd
+    /usr/sbin/sshd -D &
   fi
 
   if [[ "${SERVICE_ENABLE_API}" == "true" ]]; then
     echo "Starting API server..."
-    pm2 start k8-container-gate
+    node server.js &
   fi
 fi
 
@@ -69,4 +77,4 @@ fi
 touch /var/log/k8gate.log /var/log/k8gate-events.log /var/log/auth.log
 
 # Keep container running and monitor logs
-pm2 logs
+exec tail -F /var/log/k8gate*.log /var/log/auth.log | grep --line-buffered -E "error|warn|debug|info"
