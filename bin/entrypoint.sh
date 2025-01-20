@@ -82,9 +82,9 @@ export NODE_ENV=production
 export NODE_PORT=8080
 
 # Start services using worker service management
-echo "Checking worker installation and configuration..."
+echo "Starting services from worker configuration..."
 
-# Check worker binary and permissions
+# Check worker binary and validate configuration
 worker_path=$(which worker)
 if [ -z "$worker_path" ]; then
     echo "Error: worker binary not found in PATH"
@@ -92,27 +92,49 @@ if [ -z "$worker_path" ]; then
     exit 1
 fi
 
-echo "Worker binary location: $worker_path"
-echo "Worker binary permissions: $(ls -l $worker_path)"
-echo "Worker version: $($worker_path --version || echo 'version check failed')"
+# Set debug environment for worker
+export WORKER_DEBUG=true
+export DEBUG="${DEBUG:-*},worker:*"
 
-# Check services configuration and permissions
+# Verify worker installation
+echo "Worker binary: $worker_path ($(ls -l $worker_path))"
+echo "Worker version: $($worker_path --version)"
+
+# Validate services configuration
 config_file="/etc/worker/services.yml"
 if [ ! -f "$config_file" ]; then
     echo "Error: services.yml not found at $config_file"
-    echo "Worker config directory contents:"
     ls -la /etc/worker/
     exit 1
 fi
 
-echo "Services configuration permissions:"
-ls -l "$config_file"
-echo "Services configuration contents:"
-cat "$config_file"
+echo "Validating services configuration..."
+$worker_path validate "$config_file" || {
+    echo "Error: Invalid services configuration"
+    echo "Configuration contents:"
+    cat "$config_file"
+    exit 1
+}
 
-# Set debug environment for worker
-export WORKER_DEBUG=true
-export DEBUG="${DEBUG:-*},worker:*"
+# Initialize worker daemon with debug logging
+echo "Initializing worker daemon..."
+$worker_path --debug init || {
+    echo "Failed to initialize worker daemon"
+    $worker_path --debug init 2>&1
+    exit 1
+}
+
+# List available services with debug output
+echo "Available services:"
+$worker_path --debug list || {
+    echo "ERROR: Failed to list services"
+    echo "Service listing output:"
+    $worker_path --debug list 2>&1
+    echo "Current configuration:"
+    ls -la /etc/worker/
+    cat "$config_file"
+    exit 1
+}
 
 # Initialize worker with debug logging
 echo "Initializing worker daemon..."
@@ -135,39 +157,63 @@ $worker_path --debug list || {
     exit 1
 }
     
+# Start enabled services
+if [ -f "/etc/worker/services.yml" ]; then
+    # Start SSHD service if enabled
     if [[ "${SERVICE_ENABLE_SSHD}" == "true" ]]; then
         echo "Starting SSHD service..."
         $worker_path start sshd --debug || {
             echo "ERROR: Failed to start SSHD service"
             echo "Service configuration:"
             $worker_path show sshd --debug || true
-            echo "SSHD status:"
-            ps aux | grep sshd
+            echo "Available services:"
+            $worker_path list --debug || true
+            echo "SSHD process status:"
+            ps aux | grep sshd || true
+            echo "SSHD logs:"
+            tail -n 50 /var/log/sshd.log || true
+            exit 1
+        }
+
+        # Start key synchronization service
+        echo "Starting SSH key synchronization service..."
+        $worker_path start ssh_keys_sync --debug || {
+            echo "ERROR: Failed to start ssh_keys_sync service"
+            echo "Service configuration:"
+            $worker_path show ssh_keys_sync --debug || true
+            echo "Available services:"
+            $worker_path list --debug || true
+            echo "Process status:"
+            ps aux | grep controller.keys || true
+            echo "Key sync logs:"
+            tail -n 50 /var/log/ssh-keys-sync.log || true
             exit 1
         }
     fi
 
+    # Start API service if enabled
     if [[ "${SERVICE_ENABLE_API}" == "true" ]]; then
         echo "Starting API service..."
         $worker_path start k8gate --debug || {
             echo "ERROR: Failed to start k8gate service"
             echo "Service configuration:"
             $worker_path show k8gate --debug || true
+            echo "Available services:"
+            $worker_path list --debug || true
             echo "Node.js process status:"
-            ps aux | grep node
+            ps aux | grep node || true
+            echo "API server logs:"
+            tail -n 50 /var/log/k8gate.log || true
             exit 1
         }
     fi
 
-    # Start key synchronization service if SSHD is enabled
-    if [[ "${SERVICE_ENABLE_SSHD}" == "true" ]]; then
-        echo "Starting SSH key synchronization service..."
-        /usr/local/bin/worker start ssh-keys-sync || {
-            echo "Failed to start ssh-keys-sync service. Error code: $?"
-            echo "Worker debug output:"
-            /usr/local/bin/worker --debug start ssh-keys-sync
-        }
-    fi
+    # Verify all services started successfully
+    echo "Verifying service status..."
+    $worker_path status --debug || {
+        echo "ERROR: Service verification failed"
+        exit 1
+    }
 
     # Wait for services to initialize
     sleep 3
