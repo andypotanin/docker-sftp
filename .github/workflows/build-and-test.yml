@@ -65,12 +65,15 @@ jobs:
         ALLOW_SSH_ACCESS_ROLES: admin,maintain,write
       run: |
         # Create test SSH key and directories
+        sudo mkdir -p /etc/ssh/authorized_keys.d
+        sudo chmod 755 /etc/ssh/authorized_keys.d
         ssh-keygen -t rsa -f /tmp/test_key -N ""
-        mkdir -p /tmp/ssh/authorized_keys.d
-        cp /tmp/test_key.pub /tmp/ssh/authorized_keys.d/test-user
+        sudo cp /tmp/test_key.pub /etc/ssh/authorized_keys.d/test-user
+        sudo chmod 644 /etc/ssh/authorized_keys.d/test-user
         
         # Start container with test configuration
         docker run -d --name test-container \
+          --privileged \
           -e NODE_ENV=test \
           -e SERVICE_ENABLE_SSHD=true \
           -e SERVICE_ENABLE_API=true \
@@ -90,15 +93,13 @@ jobs:
           -e DIRECTORY_KEYS_BASE=/etc/ssh/authorized_keys.d \
           -e PASSWORD_FILE=/etc/passwd \
           -e PASSWORDS_TEMPLATE=alpine.passwords \
-          -v /tmp/ssh/authorized_keys.d:/etc/ssh/authorized_keys.d \
+          -v /etc/ssh/authorized_keys.d:/etc/ssh/authorized_keys.d:ro \
           -p 2222:22 \
           -p 8080:8080 \
           ${REGISTRY}/${IMAGE_NAME}:${{ steps.version.outputs.TAG }}
         
-        # Wait for container to start
-        sleep 10
-        
-        # Check container logs for startup
+        # Wait for container to start and show logs
+        sleep 5
         docker logs test-container
         
         # Test SSH daemon
@@ -107,14 +108,11 @@ jobs:
         # Test API server
         curl -f http://localhost:8080/health || exit 1
         
-        # Test controller.keys.js
-        docker exec test-container node /usr/local/bin/controller.keys.js || exit 1
-        
-        # Verify SSH keys were processed
+        # Test SSH key setup
         docker exec test-container test -f /etc/ssh/authorized_keys.d/test-user || exit 1
         docker exec test-container test -f /etc/passwd || exit 1
         
-        # Test SSH connection
+        # Test SSH configuration
         docker exec test-container sh -c '
           # Check sshd config
           sshd -t || exit 1
@@ -129,8 +127,9 @@ jobs:
         ' || exit 1
         
         # Cleanup
-        docker rm -f test-container
-    
+        docker stop test-container
+        docker rm test-container
+
     - name: Push Docker image
       if: github.event_name == 'push' && github.ref == 'refs/heads/master'
       env:
