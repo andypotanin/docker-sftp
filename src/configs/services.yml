@@ -1,6 +1,7 @@
 version: "1.0"
 services:
-  - name: "sshd"
+  - id: "sshd"
+    name: "sshd"
     command: "/usr/sbin/sshd -D -f /etc/ssh/sshd_config -e"
     autostart: true
     autorestart: true
@@ -10,8 +11,9 @@ services:
       HOME: "/root"
     log_file: "/var/log/sshd.log"
 
-  - name: "k8gate"
-    command: "/usr/local/bin/node /opt/sources/rabbitci/rabbit-ssh/bin/server.js"
+  - id: "k8gate"
+    name: "k8gate"
+    command: "node /opt/sources/rabbitci/rabbit-ssh/bin/server.js"
     autostart: true
     autorestart: true
     user: "udx"
@@ -33,8 +35,9 @@ services:
         retries: 3
     log_file: "/var/log/k8gate.log"
 
-  - name: "ssh-keys-sync"
-    command: "/usr/local/bin/node /opt/sources/rabbitci/rabbit-ssh/bin/controller.keys.js"
+  - id: "ssh-keys-sync"
+    name: "ssh-keys-sync"
+    command: "node /opt/sources/rabbitci/rabbit-ssh/bin/controller.keys.js"
     autostart: true
     autorestart: true
     user: "udx"
