@@ -88,18 +88,18 @@ if [[ -f "/etc/worker/services.yml" ]]; then
     # Start services based on configuration
     if [[ "${SERVICE_ENABLE_SSHD}" == "true" ]]; then
         echo "Starting SSHD service..."
-        /usr/local/bin/worker start sshd &
+        /usr/local/bin/worker service start sshd &
     fi
 
     if [[ "${SERVICE_ENABLE_API}" == "true" ]]; then
         echo "Starting API service..."
-        /usr/local/bin/worker start k8gate &
+        /usr/local/bin/worker service start k8gate &
     fi
 
     # Start key synchronization service if SSHD is enabled
     if [[ "${SERVICE_ENABLE_SSHD}" == "true" ]]; then
         echo "Starting SSH key synchronization service..."
-        /usr/local/bin/worker start ssh-keys-sync &
+        /usr/local/bin/worker service start ssh-keys-sync &
     fi
 
     # Wait for services to initialize
@@ -110,7 +110,6 @@ if [[ -f "/etc/worker/services.yml" ]]; then
 else
     echo "Error: No worker service configuration found at /etc/worker/services.yml"
     exit 1
-fi
 fi
 
 # Start SSH daemon in foreground with debugging if no services started
