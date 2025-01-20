@@ -101,38 +101,35 @@ chmod 644 /var/log/k8gate*.log
 # Enable debug logging
 export DEBUG=ssh*,sftp*,k8gate*,express*
 
-# Start services
-echo "Starting services with debug logging enabled..."
+# Start services from worker configuration
+echo "Starting services from worker configuration..."
 
-# Start API server if enabled
-if [[ "${SERVICE_ENABLE_API}" == "true" ]]; then
-  echo "Starting API server..."
-  cd /opt/sources/rabbitci/rabbit-ssh
-  
-  # Set up environment for API server
-  export HOME=/home/udx
-  export USER=udx
-  export DEBUG=ssh*,sftp*,k8gate*,express*
-  export NODE_ENV=production
-  export NODE_PORT=8080
+# Set up environment variables
+export HOME=/home/udx
+export USER=udx
+export DEBUG=ssh*,sftp*,k8gate*,express*
+export NODE_ENV=production
+export NODE_PORT=8080
 
-  # Start API server using services.yml configuration
-  node bin/server.js >> /var/log/k8gate.log 2>&1 &
-
-  # Wait for server to initialize
-  sleep 3
-fi
-
-# Start SSH daemon in foreground if enabled
+# Start services based on configuration
 if [[ "${SERVICE_ENABLE_SSHD}" == "true" ]]; then
-  echo "Starting SSH daemon..."
-  # Kill any existing sshd processes
-  pkill sshd || true
-  sleep 1
-  
-  # Start sshd in foreground with debug logging
-  exec /usr/sbin/sshd -D -e
-else
-  # If SSHD is not enabled, just monitor logs
-  exec tail -F /var/log/k8gate*.log /var/log/auth.log | grep --line-buffered -E "error|warn|debug|info"
+  echo "Starting SSHD service..."
+  /usr/local/bin/worker start sshd &
 fi
+
+if [[ "${SERVICE_ENABLE_API}" == "true" ]]; then
+  echo "Starting API service..."
+  /usr/local/bin/worker start k8gate &
+fi
+
+# Start key synchronization service if SSHD is enabled
+if [[ "${SERVICE_ENABLE_SSHD}" == "true" ]]; then
+  echo "Starting SSH key synchronization service..."
+  /usr/local/bin/worker start ssh-keys-sync &
+fi
+
+# Wait for services to initialize
+sleep 3
+
+# Monitor logs
+exec tail -F /var/log/k8gate*.log /var/log/auth.log | grep --line-buffered -E "error|warn|debug|info"
