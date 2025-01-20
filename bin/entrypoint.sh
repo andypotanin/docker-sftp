@@ -1,113 +1,76 @@
 #!/bin/bash
-# Main entrypoint script for the SFTP container
-# This script runs first and handles:
-# - SSH host key generation
-# - Kubernetes configuration setup
-# - Node.js dependency installation
-# - Service startup (SSHD and API server)
-# - Log file initialization
-#
-# This script is set as the ENTRYPOINT in Dockerfile.udx and runs before
-# controller.ssh.entrypoint.sh which handles the actual SSH connections.
-
 set -e
 
-# Generate SSH host keys if they don't exist
-if [ ! -f "/etc/ssh/ssh_host_rsa_key" ]; then
-  ssh-keygen -f /etc/ssh/ssh_host_rsa_key -N '' -t rsa
-  chmod 0600 /etc/ssh/ssh_host_rsa_key
+echo "Starting SFTP Gateway container..."
+
+# Function to safely create/modify files
+safe_touch() {
+    if [ ! -f "$1" ]; then
+        touch "$1" 2>/dev/null || true
+    fi
+    chmod 644 "$1" 2>/dev/null || true
+    chown udx:udx "$1" 2>/dev/null || true
+}
+
+# Initialize log files without failing on permission errors
+safe_touch /var/log/sshd.log
+safe_touch /var/log/auth.log
+
+# Generate SSH host keys if they don't exist and we have permission
+if [ ! -f "/etc/ssh/ssh_host_rsa_key" ] && [ -w "/etc/ssh" ]; then
+    echo "Generating SSH host keys..."
+    ssh-keygen -A
+    chmod 600 /etc/ssh/ssh_host_*_key 2>/dev/null || true
+    chmod 644 /etc/ssh/ssh_host_*_key.pub 2>/dev/null || true
+elif [ ! -f "/etc/ssh/ssh_host_rsa_key" ]; then
+    echo "Warning: SSH host keys missing and no write permission to /etc/ssh"
+    echo "Please ensure SSH keys are mounted correctly"
 fi
 
-if [ ! -f "/etc/ssh/ssh_host_dsa_key" ]; then
-  ssh-keygen -f /etc/ssh/ssh_host_dsa_key -N '' -t dsa
-  chmod 0600 /etc/ssh/ssh_host_dsa_key
+# Load worker configuration if available
+if [ -f "/usr/local/lib/worker_config.sh" ]; then
+    source /usr/local/lib/worker_config.sh
 fi
 
-if [ ! -f "/etc/ssh/ssh_host_ecdsa_key" ]; then
-  ssh-keygen -f /etc/ssh/ssh_host_ecdsa_key -N '' -t ecdsa
-  chmod 0600 /etc/ssh/ssh_host_ecdsa_key
+# Setup Kubernetes if enabled
+if [ "${SERVICE_ENABLE_K8S}" != "false" ] && [ -n "${KUBERNETES_CLUSTER_CERTIFICATE}" ]; then
+    echo "Setting up Kubernetes configuration..."
+    mkdir -p /home/udx/.kube
+    cat /var/run/secrets/kubernetes.io/serviceaccount/ca.crt > /home/udx/.kube/kubernetes-ca.crt
+    
+    kubectl config set-cluster "${KUBERNETES_CLUSTER_NAME}" \
+        --embed-certs=true \
+        --server="${KUBERNETES_CLUSTER_ENDPOINT}" \
+        --certificate-authority=/var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+
+    kubectl config set-context "${KUBERNETES_CLUSTER_NAMESPACE}" \
+        --namespace="${KUBERNETES_CLUSTER_NAMESPACE}" \
+        --cluster="${KUBERNETES_CLUSTER_NAME}" \
+        --user="${KUBERNETES_CLUSTER_SERVICEACCOUNT}"
+
+    kubectl config set-credentials "${KUBERNETES_CLUSTER_SERVICEACCOUNT}" \
+        --token="${KUBERNETES_CLUSTER_USER_TOKEN}"
+
+    kubectl config use-context "${KUBERNETES_CLUSTER_NAMESPACE}"
+    
+    cp /root/.kube/config /home/udx/.kube/config
+    chown -R udx:udx /home/udx/.kube
 fi
 
-if [ ! -f "/etc/ssh/ssh_host_ed25519_key" ]; then
-  ssh-keygen -f /etc/ssh/ssh_host_ed25519_key -N '' -t ed25519
-  chmod 0600 /etc/ssh/ssh_host_ed25519_key
-fi
-
-# Set proper permissions for SSH directory
-chmod 755 /etc/ssh
-chmod 644 /etc/ssh/*.pub
-
-# Load worker configuration
-source /usr/local/lib/worker_config.sh
-
-# Only setup Kubernetes if enabled
-if [ "${SERVICE_ENABLE_K8S}" != "false" ]; then
-  if [ "${KUBERNETES_CLUSTER_CERTIFICATE}" != "" ]; then
-    echo "Writing Kubernetes certificate to [/home/node/.kube/kuberentes-ca.crt]"
-    cat /var/run/secrets/kubernetes.io/serviceaccount/ca.crt > /home/node/.kube/kuberentes-ca.crt
-  fi
-
-  if [ -f /home/node/.kube/kuberentes-ca.crt ]; then
-    echo "Setting up Kubernetes [$KUBERNETES_CLUSTER_NAME] cluster with [$KUBERNETES_CLUSTER_NAMESPACE] namespace."
-
-    kubectl config set-cluster ${KUBERNETES_CLUSTER_NAME} \
-      --embed-certs=true \
-      --server=${KUBERNETES_CLUSTER_ENDPOINT} \
-      --certificate-authority=/var/run/secrets/kubernetes.io/serviceaccount/ca.crt
-
-    kubectl config set-context ${KUBERNETES_CLUSTER_NAMESPACE} \
-      --namespace=${KUBERNETES_CLUSTER_NAMESPACE} \
-      --cluster=${KUBERNETES_CLUSTER_NAME} \
-      --user=${KUBERNETES_CLUSTER_SERVICEACCOUNT}
-
-    kubectl config set-credentials ${KUBERNETES_CLUSTER_SERVICEACCOUNT} --token=${KUBERNETES_CLUSTER_USER_TOKEN}
-
-    kubectl config use-context ${KUBERNETES_CLUSTER_NAMESPACE}
-
-    cp /root/.kube/config /home/node/.kube/config
-
-    chown -R node:node /home/node/.kube
-  fi
-fi
-
-# Install dependencies if needed
-cd /opt/sources/rabbitci/rabbit-ssh
-if [ ! -d "node_modules" ]; then
-  npm install google-gax
-  npm install
-fi
-
-# Start services
-echo "Starting services..."
-
-if [[ "${SERVICE_ENABLE_SSHD}" == "true" ]]; then
-  echo "Starting SSH daemon..."
-  /usr/sbin/sshd
-fi
-
-# Start services
-if [[ "${SERVICE_ENABLE_API}" == "true" ]]; then
-  echo "Starting API server with PM2..."
-  cd /opt/sources/rabbitci/rabbit-ssh
-  
-  # Ensure PM2 runs as udx user
-  chown -R udx:udx /home/udx/.pm2
-  chmod -R 755 /home/udx/.pm2
-  runuser -u udx -- bash -c "cd /opt/sources/rabbitci/rabbit-ssh && PM2_HOME=/home/udx/.pm2 pm2 start ecosystem.config.js --no-daemon" &
-fi
-
-# Start SSH daemon last and in foreground
-if [[ "${SERVICE_ENABLE_SSHD}" == "true" ]]; then
-  echo "Starting SSH daemon..."
-  exec /usr/sbin/sshd -D -e
-fi
-
-# Create log files if they don't exist
-touch /var/log/k8gate.log /var/log/k8gate-events.log /var/log/auth.log
-
-# Keep container running and monitor logs
-if [ $# -gt 0 ]; then
-    exec "$@"
+# Start services using worker service management
+if [[ -f "/etc/worker/services.yml" ]]; then
+    echo "Starting services from worker configuration..."
+    worker service start
 else
-    exec tail -F /var/log/k8gate*.log /var/log/auth.log | grep --line-buffered -E "error|warn|debug|info"
+    echo "Error: No worker service configuration found at /etc/worker/services.yml"
+    exit 1
 fi
+
+# Start SSH daemon in foreground with debugging
+if [[ "${SERVICE_ENABLE_SSHD}" != "false" ]]; then
+    echo "Starting SSH daemon..."
+    exec /usr/sbin/sshd -D -e
+fi
+
+# This is a fallback and should never be reached
+exec tail -f /var/log/sshd.log /var/log/auth.log

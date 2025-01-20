@@ -6,25 +6,26 @@ services:
     command: /usr/sbin/sshd -D -f /etc/ssh/sshd_config -e
     autostart: true
     autorestart: true
+    user: root
     envs:
       - DEBUG=ssh:*,auth:*
+      - HOME=/root
     # max_restarts: 50
     # restart_delay: 10000
     # log_date_format: YYYY-MM-DD HH:mm Z
     
   - name: k8gate
-    command: node /opt/sources/k8gate/server/bin/server.js 2>&1 | tee -a /var/log/k8gate.log
+    command: node /opt/sources/rabbitci/rabbit-ssh/bin/server.js 2>&1 | tee -a /var/log/k8gate.log
     autostart: true
     autorestart: true
+    user: udx
+    cwd: /opt/sources/rabbitci/rabbit-ssh
     envs:
       - DEBUG=k8gate:*,api:*,auth:*
       - NODE_ENV=production
       - PORT=8080
       - NODE_PORT=8080
-    # max_memory_restart: 512M
-    # max_restarts: 50
-    # restart_delay: 10000
-    # log_date_format: YYYY-MM-DD HH:mm Z
+      - HOME=/home/udx
     healthcheck:
       http:
         port: ${NODE_PORT}
