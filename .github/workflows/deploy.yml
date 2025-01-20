@@ -1,0 +1,101 @@
+name: Build and Deploy Docker Image
+
+on:
+  push:
+    branches:
+      - master
+      - main
+    tags:
+      - 'v*'
+  pull_request:
+    branches:
+      - master
+      - main
+
+env:
+  DOCKER_REPO_PATH: usabilitydynamics/k8-container-gate
+  REGISTRY: docker.io
+  IMAGE_NAME: ${{ env.DOCKER_REPO_PATH }}
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Get version
+        id: version
+        run: |
+          if [[ $GITHUB_REF == refs/tags/* ]]; then
+            echo "TAG=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          else
+            echo "TAG=$(echo ${GITHUB_SHA} | cut -c1-7)" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile.udx
+          load: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.DOCKER_REPO_PATH }}:${{ steps.version.outputs.TAG }}
+            ${{ env.REGISTRY }}/${{ env.DOCKER_REPO_PATH }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Test container startup
+        run: |
+          # Create test directories with proper permissions
+          mkdir -p /tmp/ssh/etc/ssh
+          chmod 755 /tmp/ssh/etc/ssh
+          
+          # Run container with mounted volumes
+          docker run --rm \
+            -v /tmp/ssh/etc/ssh:/etc/ssh \
+            --name test-container \
+            ${{ env.REGISTRY }}/${{ env.DOCKER_REPO_PATH }}:${{ steps.version.outputs.TAG }} \
+            /bin/sh -c "ssh-keygen -A && chmod -R 755 /etc/ssh && ls -la /etc/ssh"
+          
+          # Verify SSH keys were generated
+          ls -la /tmp/ssh/etc/ssh/
+          
+          # Test SSH daemon startup
+          docker run -d --rm \
+            -v /tmp/ssh/etc/ssh:/etc/ssh \
+            --name test-sshd \
+            ${{ env.REGISTRY }}/${{ env.DOCKER_REPO_PATH }}:${{ steps.version.outputs.TAG }}
+          
+          # Wait for container to start
+          sleep 10
+          
+          # Check container logs
+          docker logs test-sshd
+          
+          # Cleanup
+          docker stop test-sshd
+
+      - name: Push Docker image
+        if: github.event_name != 'pull_request'
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile.udx
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.DOCKER_REPO_PATH }}:${{ steps.version.outputs.TAG }}
+            ${{ env.REGISTRY }}/${{ env.DOCKER_REPO_PATH }}:latest

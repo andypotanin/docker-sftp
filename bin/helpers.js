@@ -1,12 +1,12 @@
 const _ = require('lodash');
 const debug = require('debug')('ssh');
-const KubernetesProvider = require('./providers/KubernetesProvider');
-const LocalProvider = require('./providers/LocalProvider');
+const KubernetesProvider = require('../lib/providers/KubernetesProvider');
+const LocalProvider = require('../lib/providers/LocalProvider');
 
 /**
  * Get a state provider instance based on configuration
  * @param {Object} config Configuration object
- * @returns {import('./providers/StateProvider')} Configured state provider
+ * @returns {import('../lib/providers/StateProvider')} Configured state provider
  */
 module.exports.getStateProvider = function getStateProvider(config) {
     debug('Creating state provider:', config.provider);
@@ -35,7 +35,6 @@ module.exports.getStateProvider = function getStateProvider(config) {
  * @returns {*}
  */
 module.exports.normalizeMessage = function normalizeMessage(type, action, data) {
-
     if (action.indexOf('exec_start') === 0) {
         return null;
     }
@@ -52,7 +51,6 @@ module.exports.normalizeMessage = function normalizeMessage(type, action, data) 
 
     var _normalized = {
         _id: null,
-        //_type: [ type, action ].join('-'),
         _type: 'container',
         host: (process.env.HOSTNAME || process.env.HOST || require('os').hostname()),
         fields: [],
@@ -62,7 +60,6 @@ module.exports.normalizeMessage = function normalizeMessage(type, action, data) 
 
     if (_attributes && type === 'container') {
         _.forEach(_attributes, function (value, key) {
-
             var _field = {
                 key: key,
                 value: value,
@@ -76,9 +73,7 @@ module.exports.normalizeMessage = function normalizeMessage(type, action, data) 
             }
 
             _normalized.fields.push(_field);
-
         });
-
     }
 
     if (_.get(data, 'Actor.ID')) {
@@ -91,24 +86,27 @@ module.exports.normalizeMessage = function normalizeMessage(type, action, data) 
     }
 
     return _normalized;
-
 };
 
+/**
+ * Parse JSON safely with error handling
+ * @param {string} data JSON string to parse
+ * @returns {Object|string} Parsed object or original string if parsing fails
+ */
 module.exports.json_parse = function json_parse(data) {
-
     try {
-
         return JSON.parse(data);
-
     } catch (error) {
         debug('JSON parse error:', error);
         return data;
     }
-
 };
 
-// Firebase-related functions removed - using state provider instead
-
+/**
+ * Update SSH keys for containers
+ * @param {Object} options Options for key updates
+ * @param {Function} callback Callback function
+ */
 module.exports.updateKeys = function updateKeys(options, callback) {
     debug('updateKeys', options);
 
@@ -122,13 +120,10 @@ module.exports.updateKeys = function updateKeys(options, callback) {
     if (require('fs').existsSync(updateKeysOptions.keysPath)) {
         debug('updateKeys', 'controllerKeys.updateKeys');
 
-        require('../bin/controller.keys').updateKeys(updateKeysOptions, callback);
+        require('./controller.keys').updateKeys(updateKeysOptions, callback);
 
         debug('controllerKeys.updateKeys');
-
     } else {
         debug('updateKeys - Missing directory [%s].', updateKeysOptions.keysPath);
     }
-
-
 };

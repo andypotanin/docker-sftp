@@ -34,7 +34,7 @@ const https = require('https');
 const debug = require('debug')('sftp:server');
 const { exec } = require('child_process');
 const app = express();
-const utility = require('../lib/utility');
+const utility = require('./helpers');
 const md5 = require('md5');
 const rateLimit = require('../lib/rate-limit');
 const events = require('../lib/events');
@@ -137,7 +137,7 @@ app.get('/_cat/connection-string/:user', singleUserEndpoint);
 app.get('/users', userEndpoint);
 app.get('/apps', appEndpoint);
 app.get('/v1/pods', getPods);
-app.delete('/flushFirebaseContainers', flushFirebaseContainers);
+// Removed Firebase endpoint
 app.use(singleEndpoint);
 
 // Listen on configured port with health check support and error handling
@@ -257,26 +257,7 @@ function getPods(req, res) {
 
 }
 
-/**
- * Remove old containers. This is a hack in case we run out of memory again.
- *
- * curl -XDELETE localhost:8080/flushFirebaseContainers
- *
- */
-function flushFirebaseContainers(req, res) {
-
-    var _containerCollection = utility.getCollection('container', '', function (error, data) {
-
-        _containerCollection.remove();
-
-        res.send({
-            ok: false,
-            message: 'Flushing containers not fully implemented, come find me.'
-        });
-    });
-
-
-}
+// Removed Firebase container cleanup endpoint
 
 function appEndpoint(req, res) {
 
@@ -364,14 +345,7 @@ async function serverOnline() {
                 namespace: process.env.KUBERNETES_CLUSTER_NAMESPACE,
                 token: process.env.KUBERNETES_CLUSTER_USER_TOKEN
             },
-            firebase: {
-                credentials: {
-                    projectId: process.env.FIREBASE_PROJECT_ID,
-                    privateKey: process.env.FIREBASE_PRIVATE_KEY,
-                    clientEmail: process.env.FIREBASE_CLIENT_EMAIL
-                },
-                databaseURL: process.env.FIREBASE_DATABASE_URL
-            },
+
             local: {
                 statePath: '/var/lib/k8gate/state.json',
                 keysPath: '/etc/ssh/authorized_keys.d'
@@ -401,20 +375,7 @@ async function serverOnline() {
         } catch (err) {
             console.error('Failed to initialize state provider:', err.message);
             
-            // Fallback to legacy Firebase if enabled
-            if (process.env.SERVICE_ENABLE_FIREBASE === 'true') {
-                var _collection = utility.getCollection('container', 'meta/sshUser', function (error, data) {
-                    app.set('sshUser', utility.parseContainerCollection(data));
-                });
-
-                _collection.on('child_changed', function (data) {
-                    sshUser[_.get(data.val(), '_id')] = data.val();
-                });
-
-                _collection.on('child_removed', function (data) {
-                    delete sshUser[_.get(data.val(), '_id')];
-                });
-            }
+            // Firebase fallback removed - using state provider only
         }
     }
 
