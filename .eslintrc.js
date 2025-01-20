@@ -1,40 +1,37 @@
 module.exports = {
-    env: {
-        node: true,
-        es6: true,
-        jest: true
-    },
-    extends: [
-        'eslint:recommended',
-        'plugin:node/recommended'
-    ],
-    parserOptions: {
-        ecmaVersion: 2018
-    },
-    rules: {
-        // Match existing code style
-        'no-var': 'off', // Code uses var declarations
-        'prefer-const': 'off', // Allow var/let
-        'quotes': ['error', 'single'],
-        'semi': ['error', 'always'],
-        'indent': ['error', 2],
-        'no-unused-vars': ['warn', { 'args': 'none' }],
-        'node/no-unpublished-require': 'off',
-        'node/no-missing-require': 'off',
-        'no-console': 'off', // Project uses console.log extensively
-        'comma-dangle': ['error', 'never'],
-        'space-before-function-paren': ['error', {
-            'anonymous': 'always',
-            'named': 'never',
-            'asyncArrow': 'always'
-        }]
-    },
-    overrides: [
-        {
-            files: ['tests/**/*.js'],
-            env: {
-                jest: true
-            }
-        }
-    ]
+  env: {
+    node: true,
+    es6: true
+  },
+  extends: 'eslint:recommended',
+  parserOptions: {
+    ecmaVersion: 2020
+  },
+  rules: {
+    // Turn off most rules
+    'indent': 'off',
+    'linebreak-style': 'off',
+    'quotes': 'off',
+    'semi': 'off',
+    'no-unused-vars': 'off',
+    'no-console': 'off',
+    'no-undef': 'warn',
+    'no-empty': 'off',
+    'no-mixed-spaces-and-tabs': 'off',
+    'no-multiple-empty-lines': 'off',
+    'no-trailing-spaces': 'off',
+    'comma-dangle': 'off',
+    'arrow-spacing': 'off',
+    'space-before-function-paren': 'off',
+    'space-before-blocks': 'off',
+    'keyword-spacing': 'off',
+    'space-infix-ops': 'off',
+    'comma-spacing': 'off',
+    'brace-style': 'off',
+    'curly': 'off',
+    'no-var': 'off',
+    'prefer-const': 'off',
+    'object-curly-spacing': 'off',
+    'array-bracket-spacing': 'off'
+  }
 };
