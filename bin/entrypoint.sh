@@ -129,25 +129,39 @@ echo "Initializing worker daemon..."
 }
     
     # Start services based on configuration
-    # List available services
+    echo "Starting services with worker..."
+    worker_path=$(which worker)
+    
     echo "Available services:"
-    /usr/local/bin/worker list || echo "Failed to list services"
+    $worker_path list --debug || { 
+        echo "ERROR: Failed to list services"
+        echo "Worker configuration:"
+        ls -la /etc/worker/
+        cat /etc/worker/services.yml
+        exit 1
+    }
     
     if [[ "${SERVICE_ENABLE_SSHD}" == "true" ]]; then
         echo "Starting SSHD service..."
-        /usr/local/bin/worker start sshd || {
-            echo "Failed to start SSHD service. Error code: $?"
-            echo "Worker debug output:"
-            /usr/local/bin/worker --debug start sshd
+        $worker_path start sshd --debug || {
+            echo "ERROR: Failed to start SSHD service"
+            echo "Service configuration:"
+            $worker_path show sshd --debug || true
+            echo "SSHD status:"
+            ps aux | grep sshd
+            exit 1
         }
     fi
 
     if [[ "${SERVICE_ENABLE_API}" == "true" ]]; then
         echo "Starting API service..."
-        /usr/local/bin/worker start k8gate || {
-            echo "Failed to start k8gate service. Error code: $?"
-            echo "Worker debug output:"
-            /usr/local/bin/worker --debug start k8gate
+        $worker_path start k8gate --debug || {
+            echo "ERROR: Failed to start k8gate service"
+            echo "Service configuration:"
+            $worker_path show k8gate --debug || true
+            echo "Node.js process status:"
+            ps aux | grep node
+            exit 1
         }
     fi
 

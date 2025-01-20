@@ -46,7 +46,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && curl -L https://github.com/usabilitydynamics/worker/releases/download/v0.8.0/worker-linux-x64 -o /usr/local/bin/worker \
     && chmod +x /usr/local/bin/worker \
     && echo "Testing worker binary..." \
-    && /usr/local/bin/worker --version || echo "Worker binary installed but version check failed"
+    && /usr/local/bin/worker --version \
+    && echo "Verifying worker binary capabilities..." \
+    && /usr/local/bin/worker --help \
+    && echo "Testing worker configuration validation..." \
+    && mkdir -p /etc/worker/configs \
+    && touch /etc/worker/configs/test.yml \
+    && echo "version: '1.0'\nservices: []" > /etc/worker/configs/test.yml \
+    && /usr/local/bin/worker validate /etc/worker/configs/test.yml \
+    && echo "Worker binary installation and validation complete"
 
 # Set up directories and permissions
 WORKDIR /opt/sources/rabbitci/rabbit-ssh
