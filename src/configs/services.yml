@@ -4,7 +4,7 @@ version: udx.io/worker-v1/service
 services:
   - name: sshd
     command: /usr/sbin/sshd -D -f /etc/ssh/sshd_config -e
-    autostart: true
+    autostart: ${SERVICE_ENABLE_SSHD}
     autorestart: true
     envs:
       - DEBUG=ssh:*,auth:*
@@ -13,11 +13,11 @@ services:
     # log_date_format: YYYY-MM-DD HH:mm Z
     
   - name: k8gate
-    command: node /opt/sources/k8gate/server/bin/server.js 2>&1 | tee -a /var/log/k8gate.log
-    autostart: true
+    command: node /opt/sources/rabbitci/rabbit-ssh/bin/server.js 2>&1 | tee -a /var/log/k8gate.log
+    autostart: ${SERVICE_ENABLE_API}
     autorestart: true
     envs:
-      - DEBUG=k8gate:*,api:*,auth:*
+      - DEBUG=k8gate:*,api:*,auth:*,ssh:*,sftp:*
       - NODE_ENV=production
       - PORT=8080
       - NODE_PORT=8080
@@ -36,7 +36,7 @@ services:
   # Firebase events service removed
 
   - name: ssh-keys-sync
-    command: node /usr/local/bin/controller.keys.js 2>&1 | tee -a /var/log/ssh-keys-sync.log
+    command: node /opt/sources/rabbitci/rabbit-ssh/bin/controller.keys.js 2>&1 | tee -a /var/log/ssh-keys-sync.log
     autostart: ${SERVICE_ENABLE_SSHD}
     autorestart: true
     envs:

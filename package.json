@@ -20,11 +20,14 @@
         "url": "git+https://github.com/udx/docker-sftp.git"
     },
     "dependencies": {
+        "async": "^3.2.5",
         "axios": "^1.6.5",
+        "chokidar": "^3.5.3",
         "debug": "^4.3.4",
         "express": "^4.18.2",
         "lodash": "^4.17.21",
         "md5": "^2.3.0",
+        "mustache": "^4.2.0",
         "winston": "^3.11.0"
     },
     "devDependencies": {

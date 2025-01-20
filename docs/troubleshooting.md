@@ -42,10 +42,11 @@ Error from server (NotFound): pods "www-myapp-com" not found
 - Process logs:
   ```bash
   # View all logs
-  pm2 logs
+  tail -f /var/log/k8gate*.log /var/log/auth.log
   
-  # View specific service
-  pm2 logs sshd
+  # View specific service logs
+  tail -f /var/log/k8gate.log  # API server
+  tail -f /var/log/auth.log    # SSH/SFTP
   ```
 
 ### What's in the Logs
