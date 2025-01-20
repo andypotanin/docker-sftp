@@ -118,5 +118,8 @@ EXPOSE 22 8080
 # Set entrypoint
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 
+# Expose ports
+EXPOSE 22 8080
+
 # Set default command to run PM2 logs
 CMD ["/usr/local/bin/node", "/usr/local/bin/pm2", "logs"]
