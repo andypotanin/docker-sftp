@@ -1,3 +1,24 @@
+# Docker SFTP Gateway
+# This Dockerfile builds a container that provides SFTP access to Kubernetes pods
+#
+# Key Components:
+# - Base Image: usabilitydynamics/udx-worker-nodejs for Node.js support
+# - OpenSSH server for SFTP/SSH access
+# - Kubernetes tools (kubectl) for pod access
+# - Google Cloud SDK for GKE support
+#
+# The container uses two entrypoint scripts:
+# 1. entrypoint.sh: Initializes services and SSH keys (ENTRYPOINT)
+# 2. controller.ssh.entrypoint.sh: Handles SSH connections (CMD)
+#
+# Environment Variables:
+# - NODE_ENV: Production/development mode
+# - SERVICE_ENABLE_SSHD: Enable SSH daemon
+# - SERVICE_ENABLE_API: Enable API server
+# - SERVICE_ENABLE_FIREBASE: Enable Firebase integration
+# - USE_GKE_GCLOUD_AUTH_PLUGIN: Enable GKE auth plugin
+# - PORT/NODE_PORT: Service ports
+
 FROM usabilitydynamics/udx-worker-nodejs:latest
 
 # Set build arguments and environment variables
@@ -74,8 +95,10 @@ COPY --chown=udx:udx . .
 
 # Copy and set permissions for scripts
 COPY bin/entrypoint.sh /usr/local/bin/
+COPY bin/controller.ssh.entrypoint.sh /usr/local/bin/
 COPY bin/setup.js /opt/app/bin/
 RUN chmod +x /usr/local/bin/entrypoint.sh && \
+    chmod +x /usr/local/bin/controller.ssh.entrypoint.sh && \
     chmod +x /opt/app/bin/setup.js
 
 # Set permissions for executables and npm
@@ -101,5 +124,8 @@ VOLUME [ "/etc/ssh/authorized_keys.d", "/var/log" ]
 # Expose ports
 EXPOSE 22 8080
 
-# Set entrypoint
-ENTRYPOINT ["./usr/local/bin/entrypoint.sh"]
+# Set entrypoint to main entrypoint which will start services
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+
+# Set default command to start SSH controller
+CMD ["/usr/local/bin/controller.ssh.entrypoint.sh"]

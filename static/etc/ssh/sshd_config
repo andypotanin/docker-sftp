@@ -6,6 +6,18 @@
 ## sudo /usr/sbin/sshd -p 1134 -f /etc/ssh/sshd_config
 ## sudo /usr/sbin/sshd -p 1135 -f /etc/ssh/sshd_config -E /home/core/sshd.log
 
+# SSHD Configuration for Docker SFTP Gateway
+# This configuration:
+# - Disables root login and password authentication
+# - Enables public key authentication only
+# - Sets up SFTP subsystem
+# - Uses custom authorized_keys directory
+# - Enforces secure defaults
+#
+# Usage:
+# The SSHD daemon is started by entrypoint.sh when SERVICE_ENABLE_SSHD=true
+# Keys are stored in /etc/ssh/authorized_keys.d/%u
+# All connections are logged to /var/log/auth.log
 
 Port 22
 Protocol 2

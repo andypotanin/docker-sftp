@@ -1,7 +1,22 @@
 #!/bin/sh
-##
-##
-##
+# SSH Controller Entrypoint Script
+# This script handles all SSH/SFTP connections and runs after entrypoint.sh
+#
+# Responsibilities:
+# - Handles SSH and SFTP connection routing
+# - Manages kubectl exec commands to target containers
+# - Sets up terminal sessions with proper dimensions
+# - Provides SFTP support with multi-OS compatibility
+# - Logs all connection attempts and commands
+#
+# Environment Variables:
+# - USER: Current user attempting connection
+# - ENV_VARS: Connection string and user login info (format: "connection_string;user_login")
+# - SSH_ORIGINAL_COMMAND: Original SSH command being executed
+# - SSH_CLIENT: Client connection details
+# - SSH_CONNECTION: Full SSH connection details
+#
+# This script is set as the CMD in Dockerfile.udx and runs after the main entrypoint.sh
 
 export _SERVICE=${USER};
 export CONNECTION_STRING=$(echo ${ENV_VARS} | cut -d ';' -f 1)

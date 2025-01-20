@@ -1,4 +1,15 @@
 #!/bin/bash
+# Main entrypoint script for the SFTP container
+# This script runs first and handles:
+# - SSH host key generation
+# - Kubernetes configuration setup
+# - Node.js dependency installation
+# - Service startup (SSHD and API server)
+# - Log file initialization
+#
+# This script is set as the ENTRYPOINT in Dockerfile.udx and runs before
+# controller.ssh.entrypoint.sh which handles the actual SSH connections.
+
 set -e
 
 # generate fresh rsa key
@@ -77,4 +88,8 @@ fi
 touch /var/log/k8gate.log /var/log/k8gate-events.log /var/log/auth.log
 
 # Keep container running and monitor logs
-exec tail -F /var/log/k8gate*.log /var/log/auth.log | grep --line-buffered -E "error|warn|debug|info"
+if [ $# -gt 0 ]; then
+    exec "$@"
+else
+    exec tail -F /var/log/k8gate*.log /var/log/auth.log | grep --line-buffered -E "error|warn|debug|info"
+fi
