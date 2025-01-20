@@ -75,13 +75,19 @@ jobs:
         sudo cp /tmp/test_key.pub /etc/ssh/authorized_keys.d/test-user
         sudo chmod 644 /etc/ssh/authorized_keys.d/test-user
         
+        # Prepare worker configuration directory
+        mkdir -p /tmp/worker/configs
+        cp src/configs/services.yml /tmp/worker/services.yml
+        cp src/configs/services.yml /tmp/worker/configs/services.yml
+        chmod -R 755 /tmp/worker
+        
         # Start container with test configuration
         docker run -d --name test-container \
           --privileged \
           -e NODE_ENV=test \
           -e SERVICE_ENABLE_SSHD=true \
           -e SERVICE_ENABLE_API=true \
-          -e DEBUG=k8gate:*,api:*,auth:*,ssh:* \
+          -e DEBUG=k8gate:*,api:*,auth:*,ssh:*,worker:* \
           -e SERVICE_ENABLE_K8S=false \
           -e ACCESS_TOKEN=${ACCESS_TOKEN} \
           -e KUBERNETES_CLUSTER_ENDPOINT=${KUBERNETES_CLUSTER_ENDPOINT} \
@@ -98,9 +104,9 @@ jobs:
           -e PASSWORDS_TEMPLATE=alpine.passwords \
           -e STATE_PROVIDER=local \
           -e WORKER_DEBUG=true \
+          -e WORKER_CONFIG_DIR=/etc/worker \
           -v /etc/ssh/authorized_keys.d:/etc/ssh/authorized_keys.d:ro \
-          -v ${PWD}/src/configs/services.yml:/etc/worker/services.yml:ro \
-          -v ${PWD}/src/configs/services.yml:/etc/worker/configs/services.yml:ro \
+          -v /tmp/worker:/etc/worker:ro \
           -p 2222:22 \
           -p 8080:8080 \
           ${REGISTRY}/${IMAGE_NAME}:${{ steps.version.outputs.TAG }}

@@ -84,85 +84,56 @@ export NODE_PORT=8080
 # Start services using worker service management
 echo "Checking worker installation and configuration..."
 
-# Check worker binary
-if ! command -v worker &> /dev/null; then
+# Check worker binary and permissions
+worker_path=$(which worker)
+if [ -z "$worker_path" ]; then
     echo "Error: worker binary not found in PATH"
+    echo "PATH=$PATH"
     exit 1
 fi
 
-echo "Worker binary location: $(which worker)"
-echo "Worker version: $(worker --version || echo 'version check failed')"
+echo "Worker binary location: $worker_path"
+echo "Worker binary permissions: $(ls -l $worker_path)"
+echo "Worker version: $($worker_path --version || echo 'version check failed')"
 
-# Check services configuration
-if [ ! -f "/etc/worker/services.yml" ]; then
-    echo "Error: services.yml not found at /etc/worker/services.yml"
-    ls -la /etc/worker/ || echo "Worker config directory is empty or missing"
-    exit 1
-fi
-
-# Verify services.yml permissions and content
-echo "Services configuration:"
-ls -la /etc/worker/services.yml
-cat /etc/worker/services.yml
-
-# Verify worker can read the configuration
-/usr/local/bin/worker validate /etc/worker/services.yml || {
-    echo "ERROR: Failed to validate services configuration"
-    exit 1
-}
-
-echo "Services configuration found:"
-cat /etc/worker/services.yml
-
-# Verify worker configuration directory
-echo "Worker configuration directory:"
-ls -la /etc/worker/
-
-# Validate services configuration
-echo "Validating services configuration..."
-/usr/local/bin/worker --debug validate /etc/worker/services.yml || {
-    echo "Failed to validate services configuration. Error code: $?"
-    exit 1
-}
-
-# List and verify available services
-echo "Available services:"
-/usr/local/bin/worker --debug list || {
-    echo "Failed to list services. Error code: $?"
-    exit 1
-}
-
-# Initialize worker daemon
-echo "Initializing worker daemon..."
-/usr/local/bin/worker --debug init || {
-    echo "Failed to initialize worker daemon. Error code: $?"
-    exit 1
-}
-    
-    # Start services based on configuration
-    echo "Starting services with worker..."
-    worker_path=$(which worker)
-
-    # Verify worker binary
-    echo "Worker binary location: $(which worker)"
-    echo "Worker version: $($worker_path --version)"
-
-    # Verify configuration file
-    echo "Worker configuration directory:"
+# Check services configuration and permissions
+config_file="/etc/worker/services.yml"
+if [ ! -f "$config_file" ]; then
+    echo "Error: services.yml not found at $config_file"
+    echo "Worker config directory contents:"
     ls -la /etc/worker/
-    echo "Services configuration:"
-    cat /etc/worker/services.yml
+    exit 1
+fi
 
-    # List available services
-    echo "Available services:"
-    $worker_path list --debug || {
-        echo "ERROR: Failed to list services"
-        echo "Worker debug output:"
-        $worker_path --debug list
-        echo "Configuration validation:"
-        $worker_path validate /etc/worker/services.yml || true
-        exit 1
-    }
+echo "Services configuration permissions:"
+ls -l "$config_file"
+echo "Services configuration contents:"
+cat "$config_file"
+
+# Set debug environment for worker
+export WORKER_DEBUG=true
+export DEBUG="${DEBUG:-*},worker:*"
+
+# Initialize worker with debug logging
+echo "Initializing worker daemon..."
+$worker_path --debug init || {
+    echo "Failed to initialize worker daemon. Error code: $?"
+    echo "Daemon initialization output:"
+    $worker_path --debug init 2>&1
+    exit 1
+}
+
+# List available services with debug output
+echo "Available services:"
+$worker_path --debug list || {
+    echo "ERROR: Failed to list services"
+    echo "Service listing output:"
+    $worker_path --debug list 2>&1
+    echo "Current configuration:"
+    ls -la /etc/worker/
+    cat "$config_file"
+    exit 1
+}
     
     if [[ "${SERVICE_ENABLE_SSHD}" == "true" ]]; then
         echo "Starting SSHD service..."

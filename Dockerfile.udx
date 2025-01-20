@@ -34,7 +34,14 @@ ENV NODE_ENV=production \
 # Switch to root for package installations
 USER root
 
-# Install system dependencies and worker binary
+# Install worker binary first
+RUN curl -L https://github.com/usabilitydynamics/worker/releases/download/v0.8.0/worker-linux-x64 -o /usr/local/bin/worker \
+    && chmod +x /usr/local/bin/worker \
+    && echo "Testing worker binary..." \
+    && /usr/local/bin/worker --version \
+    && mkdir -p /etc/worker
+
+# Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     openssh-server \
     openssh-sftp-server \
@@ -42,14 +49,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     curl \
     && apt-get clean \
-    && rm -rf /var/lib/apt/lists/* \
-    && echo "Installing worker binary..." \
-    && curl -L https://github.com/usabilitydynamics/worker/releases/download/v0.8.0/worker-linux-x64 -o /usr/local/bin/worker \
-    && chmod +x /usr/local/bin/worker \
-    && echo "Testing worker binary..." \
-    && /usr/local/bin/worker --version \
-    && echo "Creating test configuration..." \
-    && mkdir -p /etc/worker \
+    && rm -rf /var/lib/apt/lists/*
+
+# Verify worker installation and basic functionality
+RUN echo "Testing worker configuration..." \
     && echo 'version: "1.0"\nservices:\n  - name: test\n    command: "echo test"\n    autostart: true' > /etc/worker/test.yml \
     && echo "Test configuration:" \
     && cat /etc/worker/test.yml \
