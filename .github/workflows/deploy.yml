@@ -13,7 +13,9 @@ on:
       - main
 
 env:
-  DOCKER_REPO_PATH: ${{ vars.DOCKER_REPO_PATH }}
+  DOCKER_REPO_PATH: usabilitydynamics/k8-container-gate
+  REGISTRY: docker.io
+  IMAGE_NAME: ${{ env.DOCKER_REPO_PATH }}
 
 jobs:
   build-and-push:
@@ -51,8 +53,8 @@ jobs:
           file: ./Dockerfile.udx
           load: true
           tags: |
-            ${{ env.DOCKER_REPO_PATH }}:${{ steps.version.outputs.TAG }}
-            ${{ env.DOCKER_REPO_PATH }}:latest
+            ${{ env.REGISTRY }}/${{ env.DOCKER_REPO_PATH }}:${{ steps.version.outputs.TAG }}
+            ${{ env.REGISTRY }}/${{ env.DOCKER_REPO_PATH }}:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
