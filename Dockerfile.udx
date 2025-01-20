@@ -45,7 +45,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Set up directories and permissions
 WORKDIR /opt/sources/rabbitci/rabbit-ssh
 
-RUN mkdir -p /home/node/.kube \
+RUN mkdir -p \
+    /home/node/.kube \
     /root/.ssh \
     /etc/ssh \
     /etc/ssh/authorized_keys.d \
@@ -55,9 +56,13 @@ RUN mkdir -p /home/node/.kube \
     /usr/local/lib/node_modules \
     /home/node/.npm \
     && rm -rf /etc/ssh/* \
+    && chmod 755 /etc/ssh \
     && chmod 755 /etc/ssh/authorized_keys.d \
     && chown -R node:node /home/node \
-    && chown -R node:node /opt/sources/rabbitci
+    && chown -R node:node /opt/sources/rabbitci \
+    && chown -R node:node /etc/ssh \
+    && chown -R node:node /var/log \
+    && chmod 777 /etc/ssh/authorized_keys.d
 
 # Copy SSH configuration and worker configs
 COPY --chown=node:node static/etc/ssh/ /etc/ssh/

@@ -44,20 +44,56 @@ jobs:
           username: ${{ secrets.DOCKER_HUB_USERNAME }}
           password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
 
-      - name: Build and push Docker image
+      - name: Build Docker image
         uses: docker/build-push-action@v5
         with:
           context: .
           file: ./Dockerfile.udx
-          push: ${{ github.event_name != 'pull_request' }}
+          load: true
           tags: |
             ${{ env.DOCKER_REPO_PATH }}:${{ steps.version.outputs.TAG }}
             ${{ env.DOCKER_REPO_PATH }}:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Verify image
-        if: github.event_name != 'pull_request'
+      - name: Test container startup
         run: |
-          docker pull ${{ env.DOCKER_REPO_PATH }}:${{ steps.version.outputs.TAG }}
-          docker inspect ${{ env.DOCKER_REPO_PATH }}:${{ steps.version.outputs.TAG }}
+          # Create test directories with proper permissions
+          mkdir -p /tmp/ssh/etc/ssh
+          chmod 755 /tmp/ssh/etc/ssh
+          
+          # Run container with mounted volumes
+          docker run --rm \
+            -v /tmp/ssh/etc/ssh:/etc/ssh \
+            --name test-container \
+            ${{ env.DOCKER_REPO_PATH }}:${{ steps.version.outputs.TAG }} \
+            /bin/sh -c "ssh-keygen -A && chmod -R 755 /etc/ssh && ls -la /etc/ssh"
+          
+          # Verify SSH keys were generated
+          ls -la /tmp/ssh/etc/ssh/
+          
+          # Test SSH daemon startup
+          docker run -d --rm \
+            -v /tmp/ssh/etc/ssh:/etc/ssh \
+            --name test-sshd \
+            ${{ env.DOCKER_REPO_PATH }}:${{ steps.version.outputs.TAG }}
+          
+          # Wait for container to start
+          sleep 10
+          
+          # Check container logs
+          docker logs test-sshd
+          
+          # Cleanup
+          docker stop test-sshd
+
+      - name: Push Docker image
+        if: github.event_name != 'pull_request'
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile.udx
+          push: true
+          tags: |
+            ${{ env.DOCKER_REPO_PATH }}:${{ steps.version.outputs.TAG }}
+            ${{ env.DOCKER_REPO_PATH }}:latest
