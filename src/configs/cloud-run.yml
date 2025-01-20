@@ -1,0 +1,46 @@
+---
+kind: cloudRunService
+version: udx.io/cloud-run-v1/service
+service:
+  name: sftp-api
+  container:
+    image: ${DOCKER_REGISTRY}/${IMAGE_NAME}:latest
+    port: 8080
+    resources:
+      cpu: 1
+      memory: 1Gi
+      minInstances: 1
+      maxInstances: 10
+    env:
+      - name: NODE_ENV
+        value: production
+      - name: SERVICE_ENABLE_API
+        value: "true"
+      - name: DEBUG
+        value: "sftp:*"
+      - name: PORT
+        value: "8080"
+      - name: NODE_PORT
+        value: "8080"
+    secrets:
+      - name: ACCESS_TOKEN
+        secretName: ${GITHUB_TOKEN_SECRET_NAME}
+    healthCheck:
+      httpGet:
+        path: /health
+        port: 8080
+      initialDelaySeconds: 10
+      timeoutSeconds: 5
+      periodSeconds: 30
+      failureThreshold: 3
+      successThreshold: 1
+  scaling:
+    minInstances: 1
+    maxInstances: 10
+  ingress: all  # Allow unauthenticated access
+  execution:
+    serviceAccount: ${GCP_SERVICE_ACCOUNT}
+    environment: gen2
+    http2: true
+    timeout: 300s
+    concurrency: 80

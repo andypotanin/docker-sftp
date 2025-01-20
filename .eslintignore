@@ -1,0 +1,15 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+build/
+
+# IDE and history files
+.history/
+.vscode/
+.idea/
+
+# Logs
+logs/
+*.log
