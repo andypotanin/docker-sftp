@@ -82,24 +82,49 @@ export NODE_ENV=production
 export NODE_PORT=8080
 
 # Start services using worker service management
+echo "Checking worker installation..."
+which worker || echo "worker not found in PATH"
+ls -l /usr/local/bin/worker* || echo "No worker binaries in /usr/local/bin"
+ls -l /etc/worker/services.yml || echo "services.yml not found"
+
 if [[ -f "/etc/worker/services.yml" ]]; then
     echo "Starting services from worker configuration..."
+    echo "Worker binary location: $(which worker)"
+    echo "Worker version: $(worker --version || echo 'version command failed')"
+    echo "Services configuration:"
+    cat /etc/worker/services.yml
     
     # Start services based on configuration
+    # List available services
+    echo "Available services:"
+    /usr/local/bin/worker list || echo "Failed to list services"
+    
     if [[ "${SERVICE_ENABLE_SSHD}" == "true" ]]; then
         echo "Starting SSHD service..."
-        /usr/local/bin/worker service start sshd &
+        /usr/local/bin/worker start sshd || {
+            echo "Failed to start SSHD service. Error code: $?"
+            echo "Worker debug output:"
+            /usr/local/bin/worker --debug start sshd
+        }
     fi
 
     if [[ "${SERVICE_ENABLE_API}" == "true" ]]; then
         echo "Starting API service..."
-        /usr/local/bin/worker service start k8gate &
+        /usr/local/bin/worker start k8gate || {
+            echo "Failed to start k8gate service. Error code: $?"
+            echo "Worker debug output:"
+            /usr/local/bin/worker --debug start k8gate
+        }
     fi
 
     # Start key synchronization service if SSHD is enabled
     if [[ "${SERVICE_ENABLE_SSHD}" == "true" ]]; then
         echo "Starting SSH key synchronization service..."
-        /usr/local/bin/worker service start ssh-keys-sync &
+        /usr/local/bin/worker start ssh-keys-sync || {
+            echo "Failed to start ssh-keys-sync service. Error code: $?"
+            echo "Worker debug output:"
+            /usr/local/bin/worker --debug start ssh-keys-sync
+        }
     fi
 
     # Wait for services to initialize

@@ -1,3 +1,4 @@
+version: "1.0"
 services:
   - name: sshd
     command: /usr/sbin/sshd -D -f /etc/ssh/sshd_config -e
@@ -16,7 +17,7 @@ services:
     cwd: /opt/sources/rabbitci/rabbit-ssh
     envs:
       - DEBUG=k8gate:*,api:*,auth:*,ssh:*
-      - NODE_ENV=test
+      - NODE_ENV=production
       - PORT=8080
       - NODE_PORT=8080
       - HOME=/home/udx

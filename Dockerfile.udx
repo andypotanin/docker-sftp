@@ -101,6 +101,10 @@ COPY --chown=udx:udx . /opt/sources/rabbitci/rabbit-ssh/
 
 # Copy service configuration and set permissions
 COPY --chown=udx:udx src/configs/services.yml /etc/worker/services.yml
+RUN chmod 644 /etc/worker/services.yml && \
+    chown udx:udx /etc/worker/services.yml && \
+    mkdir -p /etc/worker/logs && \
+    chown -R udx:udx /etc/worker/logs
 
 # Set up worker configuration directories
 RUN mkdir -p /home/udx/.cd/configs /etc/worker && \
