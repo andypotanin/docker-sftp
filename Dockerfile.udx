@@ -45,6 +45,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Set up directories and permissions
 WORKDIR /opt/sources/rabbitci/rabbit-ssh
 
+# Create node user and group
+RUN groupadd -r node && useradd -r -g node -m node
+
+# Create required directories
 RUN mkdir -p \
     /home/node/.kube \
     /root/.ssh \
