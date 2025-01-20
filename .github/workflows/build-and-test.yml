@@ -40,11 +40,11 @@ jobs:
     
     - name: Build Docker image
       env:
-        REGISTRY: ${{ github.event_name == 'push' && secrets.DOCKER_HUB_USERNAME || 'localhost' }}
+        REGISTRY: usabilitydynamics
         IMAGE_NAME: k8-container-gate
       run: |
-        # Ensure we have a valid registry
-        if [ "$REGISTRY" = "" ]; then
+        # Set default registry if not provided
+        if [ -z "$REGISTRY" ]; then
           REGISTRY="localhost"
         fi
         
