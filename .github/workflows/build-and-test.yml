@@ -72,9 +72,14 @@ jobs:
         
         # Prepare worker configuration directory
         mkdir -p /tmp/worker/configs
-        cp src/configs/services.yml /tmp/worker/services.yml
-        cp src/configs/services.yml /tmp/worker/configs/services.yml
+        cp .github/workflows/services.yml /tmp/worker/services.yml
+        cp .github/workflows/services.yml /tmp/worker/configs/services.yml
         chmod -R 755 /tmp/worker
+        chown -R root:root /tmp/worker
+        echo "Worker configuration contents:"
+        cat /tmp/worker/services.yml
+        echo "Testing worker configuration validation..."
+        docker run --rm -v /tmp/worker:/etc/worker:ro sftp-gateway:${{ steps.version.outputs.TAG }} worker validate /etc/worker/services.yml
         
         # Start container with test configuration
         docker run -d --name test-container \

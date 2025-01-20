@@ -39,7 +39,12 @@ RUN curl -L https://github.com/usabilitydynamics/worker/releases/download/v0.8.0
     && chmod +x /usr/local/bin/worker \
     && echo "Testing worker binary..." \
     && /usr/local/bin/worker --version \
-    && mkdir -p /etc/worker
+    && mkdir -p /etc/worker /etc/worker/configs \
+    && chown -R root:root /usr/local/bin/worker \
+    && chmod 755 /usr/local/bin/worker \
+    && echo "Verifying worker installation..." \
+    && which worker \
+    && worker --version
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -125,8 +130,11 @@ RUN mkdir -p /etc/worker/logs /etc/worker/configs && \
     chmod -R 755 /etc/worker
 
 # Copy and verify service configuration
-COPY --chown=udx:udx src/configs/services.yml /etc/worker/services.yml
-COPY --chown=udx:udx src/configs/services.yml /etc/worker/configs/services.yml
+COPY --chown=root:root .github/workflows/services.yml /etc/worker/services.yml
+COPY --chown=root:root .github/workflows/services.yml /etc/worker/configs/services.yml
+RUN echo "Verifying service configuration..." \
+    && cat /etc/worker/services.yml \
+    && worker validate /etc/worker/services.yml
 
 # Verify worker configuration
 RUN echo "Verifying worker configuration..." && \
