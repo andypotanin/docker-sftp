@@ -40,18 +40,26 @@ jobs:
     
     - name: Build Docker image
       env:
-        REGISTRY: ${{ secrets.DOCKER_HUB_USERNAME }}
+        REGISTRY: ${{ github.event_name == 'push' && secrets.DOCKER_HUB_USERNAME || 'localhost' }}
         IMAGE_NAME: k8-container-gate
       run: |
+        # Ensure we have a valid registry
+        if [ "$REGISTRY" = "" ]; then
+          REGISTRY="localhost"
+        fi
+        
+        # Build Docker image with version tag
         docker build \
           --tag ${REGISTRY}/${IMAGE_NAME}:${{ steps.version.outputs.TAG }} \
           --tag ${REGISTRY}/${IMAGE_NAME}:latest \
           --build-arg NODE_ENV=test \
+          --build-arg SERVICE_ENABLE_SSHD=true \
+          --build-arg SERVICE_ENABLE_API=true \
           -f Dockerfile.udx .
     
     - name: Test container startup and services
       env:
-        REGISTRY: ${{ secrets.DOCKER_HUB_USERNAME }}
+        REGISTRY: ${{ github.event_name == 'push' && secrets.DOCKER_HUB_USERNAME || 'localhost' }}
         IMAGE_NAME: k8-container-gate
         ACCESS_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         KUBERNETES_CLUSTER_ENDPOINT: https://test-cluster:6443
@@ -79,7 +87,6 @@ jobs:
           -e SERVICE_ENABLE_API=true \
           -e DEBUG=k8gate:*,api:*,auth:*,ssh:* \
           -e SERVICE_ENABLE_K8S=false \
-          -e SERVICE_ENABLE_FIREBASE=false \
           -e ACCESS_TOKEN=${ACCESS_TOKEN} \
           -e KUBERNETES_CLUSTER_ENDPOINT=${KUBERNETES_CLUSTER_ENDPOINT} \
           -e KUBERNETES_CLUSTER_NAME=${KUBERNETES_CLUSTER_NAME} \
@@ -93,7 +100,9 @@ jobs:
           -e DIRECTORY_KEYS_BASE=/etc/ssh/authorized_keys.d \
           -e PASSWORD_FILE=/etc/passwd \
           -e PASSWORDS_TEMPLATE=alpine.passwords \
+          -e STATE_PROVIDER=local \
           -v /etc/ssh/authorized_keys.d:/etc/ssh/authorized_keys.d:ro \
+          -v ${PWD}/.github/workflows/services.yml:/etc/worker/services.yml:ro \
           -p 2222:22 \
           -p 8080:8080 \
           ${REGISTRY}/${IMAGE_NAME}:${{ steps.version.outputs.TAG }}

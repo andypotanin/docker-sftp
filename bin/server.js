@@ -36,6 +36,7 @@ const { exec } = require('child_process');
 const app = express();
 const utility = require('../lib/utility');
 const md5 = require('md5');
+const normalizeMessage = require('../lib/normalize-message');
 
 /**
  * Parse JSON safely
@@ -58,22 +59,7 @@ function json_parse(data) {
  * @param {Object} data Event data
  * @returns {Object|null} Normalized container object or null
  */
-function normalizeMessage(type, action, data) {
-    if (action.indexOf('exec_start') === 0 || 
-        action.indexOf('exec_create') === 0 || 
-        type !== 'container') {
-        return null;
-    }
-
-    const _attributes = _.get(data, 'Actor.Attributes', {});
-    const _normalized = {
-        _id: null,
-        _type: 'container',
-        host: (process.env.HOSTNAME || process.env.HOST || require('os').hostname()),
-        fields: [],
-        updated: _.get(data, 'timeNano'),
-        lastAction: _.get(data, 'Action')
-    };
+// Removed unused function
 
     if (_attributes && type === 'container') {
         _.forEach(_attributes, (value, key) => {
@@ -433,8 +419,6 @@ function singleEndpoint(req, res) {
 
 async function serverOnline() {
     console.log('k8-container-gate-server online!');
-
-    var sshUser = app.get('sshUser') || {};
 
     // Initialize state provider
     const stateProvider = utility.getStateProvider({
