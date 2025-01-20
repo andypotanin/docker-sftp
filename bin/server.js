@@ -52,38 +52,6 @@ function json_parse(data) {
     }
 }
 
-/**
- * Converts Docker event message into a normalized container object.
- * @param {string} type Event type
- * @param {string} action Event action
- * @param {Object} data Event data
- * @returns {Object|null} Normalized container object or null
- */
-// Removed unused function
-
-    if (_attributes && type === 'container') {
-        _.forEach(_attributes, (value, key) => {
-            const _field = {
-                key,
-                value,
-                type: 'string'
-            };
-
-            if (key === 'annotation.io.kubernetes.container.ports') {
-                _field.value = json_parse(value);
-                _field.type = 'object';
-            }
-
-            _normalized.fields.push(_field);
-        });
-    }
-
-    if (_.get(data, 'Actor.ID')) {
-        _normalized._id = _.get(data, 'Actor.ID', '').substring(0, 16);
-    }
-
-    return _normalized._id ? _normalized : null;
-}
 const rateLimit = require('../lib/rate-limit');
 const events = require('../lib/events');
 
