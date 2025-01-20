@@ -88,11 +88,11 @@ fi
 if [[ "${SERVICE_ENABLE_API}" == "true" ]]; then
   echo "Starting API server with PM2..."
   cd /opt/sources/rabbitci/rabbit-ssh
-  mkdir -p /home/node/.pm2
-  chown -R node:node /home/node/.pm2
+  mkdir -p /home/udx/.pm2
+  chown -R udx:udx /home/udx/.pm2
   echo "Starting PM2 with ecosystem config at $(pwd)/ecosystem.config.js"
   ls -la ecosystem.config.js
-  PM2_HOME=/home/node/.pm2 pm2 start ecosystem.config.js --no-daemon
+  PM2_HOME=/home/udx/.pm2 pm2 start ecosystem.config.js --no-daemon
 fi
 
 # Create log files if they don't exist

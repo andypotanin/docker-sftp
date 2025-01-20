@@ -29,7 +29,7 @@ ENV NODE_ENV=production \
     USE_GKE_GCLOUD_AUTH_PLUGIN=true \
     PORT=8080 \
     NODE_PORT=8080 \
-    PM2_HOME=/home/node/.pm2
+    PM2_HOME=/home/udx/.pm2
 
 # Switch to root for package installations
 USER root
@@ -46,23 +46,20 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Set up directories and permissions
 WORKDIR /opt/sources/rabbitci/rabbit-ssh
 
-# Create node user and group
-RUN groupadd -r node && useradd -r -g node -m node
-
 # Create required directories with correct ownership
 RUN mkdir -p \
-    /home/node/.kube \
+    /home/udx/.kube \
     /root/.ssh \
     /etc/ssh \
-    /home/node/.cd/configs \
+    /home/udx/.cd/configs \
     /etc/worker \
     /var/log \
     /usr/local/lib/node_modules \
-    /home/node/.npm \
+    /home/udx/.npm \
     /usr/local/bin && \
     ln -s /usr/bin/node /usr/local/bin/node && \
-    chown -R node:node /home/node && \
-    chmod -R 755 /home/node/.cd/configs
+    chown -R udx:udx /home/udx && \
+    chmod -R 755 /home/udx/.cd/configs
 
 # Set up SSH directories and permissions
 RUN rm -rf /etc/ssh/* && \
@@ -103,10 +100,10 @@ RUN curl -sSL https://sdk.cloud.google.com | bash -s -- --install-dir=/usr/local
 ENV PATH $PATH:/usr/local/google-cloud-sdk/bin
 
 # Copy application files
-COPY --chown=node:node . /opt/sources/rabbitci/rabbit-ssh/
+COPY --chown=udx:udx . /opt/sources/rabbitci/rabbit-ssh/
 
 # Copy PM2 ecosystem config
-COPY --chown=node:node static/ecosystem.config.js /opt/sources/rabbitci/rabbit-ssh/ecosystem.config.js
+COPY --chown=udx:udx static/ecosystem.config.js /opt/sources/rabbitci/rabbit-ssh/ecosystem.config.js
 
 # Set permissions for scripts
 RUN chmod +x /opt/sources/rabbitci/rabbit-ssh/bin/entrypoint.sh && \

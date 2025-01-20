@@ -12,11 +12,11 @@ module.exports = {
       SERVICE_ENABLE_SSHD: 'true',
       SERVICE_ENABLE_API: 'true',
       NODE_PORT: '8080',
-      HOME: '/home/node'
+      HOME: '/home/udx'
     },
     merge_logs: true,
     log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
     cwd: '/opt/sources/rabbitci/rabbit-ssh',
-    user: 'node'
+    user: 'udx'
   }]
 };
