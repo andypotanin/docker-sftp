@@ -39,14 +39,11 @@ jobs:
       run: docker pull usabilitydynamics/udx-worker-nodejs:latest
     
     - name: Build Docker image
-      env:
-        REGISTRY: test
-        IMAGE_NAME: k8-container-gate
       run: |
         # Build Docker image with version tag
         docker build \
-          --tag ${REGISTRY}/${IMAGE_NAME}:${{ steps.version.outputs.TAG }} \
-          --tag ${REGISTRY}/${IMAGE_NAME}:latest \
+          --tag sftp-gateway:${{ steps.version.outputs.TAG }} \
+          --tag sftp-gateway:latest \
           --build-arg NODE_ENV=test \
           --build-arg SERVICE_ENABLE_SSHD=true \
           --build-arg SERVICE_ENABLE_API=true \
@@ -55,8 +52,6 @@ jobs:
     
     - name: Test container startup and services
       env:
-        REGISTRY: test
-        IMAGE_NAME: k8-container-gate
         ACCESS_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         KUBERNETES_CLUSTER_ENDPOINT: https://test-cluster:6443
         KUBERNETES_CLUSTER_NAME: test-cluster
@@ -109,7 +104,7 @@ jobs:
           -v /tmp/worker:/etc/worker:ro \
           -p 2222:22 \
           -p 8080:8080 \
-          ${REGISTRY}/${IMAGE_NAME}:${{ steps.version.outputs.TAG }}
+          sftp-gateway:${{ steps.version.outputs.TAG }}
         
         # Wait for container to start and show logs
         sleep 5
@@ -147,7 +142,10 @@ jobs:
       if: github.event_name == 'push' && github.ref == 'refs/heads/master'
       env:
         REGISTRY: ${{ secrets.DOCKER_HUB_USERNAME }}
-        IMAGE_NAME: k8-container-gate
       run: |
-        docker push ${REGISTRY}/${IMAGE_NAME}:${{ steps.version.outputs.TAG }}
-        docker push ${REGISTRY}/${IMAGE_NAME}:latest
+        # Tag for Docker Hub
+        docker tag sftp-gateway:${{ steps.version.outputs.TAG }} ${REGISTRY}/k8-container-gate:${{ steps.version.outputs.TAG }}
+        docker tag sftp-gateway:latest ${REGISTRY}/k8-container-gate:latest
+        # Push to Docker Hub
+        docker push ${REGISTRY}/k8-container-gate:${{ steps.version.outputs.TAG }}
+        docker push ${REGISTRY}/k8-container-gate:latest
