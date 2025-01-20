@@ -21,9 +21,8 @@
 
 FROM usabilitydynamics/udx-worker-nodejs:latest
 
-# Set build arguments and environment variables
-ARG NODE_ENV=production
-ENV NODE_ENV=${NODE_ENV} \
+# Set environment variables
+ENV NODE_ENV=production \
     SERVICE_ENABLE_SSHD=true \
     SERVICE_ENABLE_API=true \
     SERVICE_ENABLE_FIREBASE=false \
@@ -44,46 +43,34 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Set up directories and permissions
-WORKDIR /opt/sources/k8gate/server
+WORKDIR /opt/sources/rabbitci/rabbit-ssh
 
-RUN mkdir -p /home/udx/.kube \
+RUN mkdir -p /home/node/.kube \
     /root/.ssh \
     /etc/ssh \
     /etc/ssh/authorized_keys.d \
-    /home/udx/.cd/configs \
+    /home/node/.cd/configs \
     /etc/worker \
     /var/log \
     /usr/local/lib/node_modules \
-    /home/udx/.npm \
+    /home/node/.npm \
     && rm -rf /etc/ssh/* \
-    && mkdir -p /etc/ssh/authorized_keys.d \
     && chmod 755 /etc/ssh/authorized_keys.d \
-    && chown -R udx:udx /home/udx \
-    && chown -R udx:udx /opt/sources/k8gate
+    && chown -R node:node /home/node \
+    && chown -R node:node /opt/sources/rabbitci
 
-# Copy SSH configuration
-COPY --chown=udx:udx static/etc/ssh/ /etc/ssh/
-
-# Set up directories and permissions
-WORKDIR /opt/sources/k8gate/server
-
-# Copy worker configurations
-COPY --chown=udx:udx src/configs/worker.yml /home/udx/.cd/configs/worker.yml
-COPY --chown=udx:udx src/configs/services.yml /etc/worker/services.yml
-
-# Create necessary directories and set permissions
-RUN mkdir -p /etc/ssh/authorized_keys.d && \
-    mkdir -p /var/log && \
-    touch /var/log/k8gate.log /var/log/k8gate-events.log /var/log/auth.log && \
-    chmod 644 /var/log/k8gate.log /var/log/k8gate-events.log /var/log/auth.log && \
-    chmod 755 /etc/ssh && \
-    chmod 755 /etc/ssh/authorized_keys.d
+# Copy SSH configuration and worker configs
+COPY --chown=node:node static/etc/ssh/ /etc/ssh/
+COPY --chown=node:node src/configs/worker.yml /home/node/.cd/configs/worker.yml
+COPY --chown=node:node src/configs/services.yml /etc/worker/services.yml
 
 # Set up logging and permissions
-RUN touch /var/log/k8gate.log /var/log/k8gate-events.log /var/log/auth.log \
-    && chown udx:udx /var/log/k8gate.log \
-    && chown udx:udx /var/log/k8gate-events.log \
-    && chown udx:udx /var/log/auth.log
+RUN touch /var/log/sshd.log /var/log/auth.log \
+    && chmod 644 /var/log/sshd.log /var/log/auth.log \
+    && chown node:node /var/log/sshd.log \
+    && chown node:node /var/log/auth.log \
+    && chmod 755 /etc/ssh \
+    && chmod 755 /etc/ssh/authorized_keys.d
 
 # Install kubectl
 RUN curl -L https://dl.k8s.io/release/v1.29.0/bin/linux/amd64/kubectl -o /usr/local/bin/kubectl \
@@ -95,35 +82,21 @@ RUN curl -sSL https://sdk.cloud.google.com | bash -s -- --install-dir=/usr/local
     && chown -R udx:udx /usr/local/google-cloud-sdk
 ENV PATH $PATH:/usr/local/google-cloud-sdk/bin
 
-# Set working directory
-WORKDIR /opt/sources/k8gate/server
-
-# Copy configuration files
-COPY --chown=udx:udx static/etc/ssh/ /etc/ssh/
-COPY --chown=udx:udx src/configs/worker.yml /home/udx/.cd/configs/worker.yml
-COPY --chown=udx:udx src/configs/services.yml /etc/worker/services.yml
-
 # Copy application files
-COPY --chown=udx:udx . .
+COPY --chown=node:node . /opt/sources/rabbitci/rabbit-ssh/
 
-# Copy and set permissions for scripts
-COPY bin/entrypoint.sh /usr/local/bin/
-COPY bin/controller.ssh.entrypoint.sh /usr/local/bin/
-COPY bin/setup.js /opt/app/bin/
-RUN chmod +x /usr/local/bin/entrypoint.sh && \
-    chmod +x /usr/local/bin/controller.ssh.entrypoint.sh && \
-    chmod +x /opt/app/bin/setup.js
+# Set permissions for scripts
+RUN chmod +x /opt/sources/rabbitci/rabbit-ssh/bin/entrypoint.sh && \
+    chmod +x /opt/sources/rabbitci/rabbit-ssh/bin/controller.ssh.entrypoint.sh && \
+    chmod -R 755 /opt/sources/rabbitci/rabbit-ssh/bin
 
-# Set permissions for executables and npm
+# Set permissions for npm
 RUN mkdir -p /usr/local/lib/node_modules \
-    && mkdir -p /home/udx/.npm \
-    && chown -R udx:udx /home/udx/.npm \
-    && chmod -R 775 /home/udx/.npm \
-    && chown -R udx:udx /opt/sources/k8gate/server/bin \
-    && chmod -R 755 /opt/sources/k8gate/server/bin
+    && chown -R node:node /home/node/.npm \
+    && chmod -R 775 /home/node/.npm
 
 # Switch back to non-root user
-USER udx
+USER node
 
 # Add Google Cloud SDK to PATH
 ENV PATH $PATH:/usr/local/google-cloud-sdk/bin
@@ -140,5 +113,5 @@ EXPOSE 22 8080
 # Set entrypoint
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 
-# Set default command to run server
-CMD ["/usr/local/bin/node", "/opt/sources/k8gate/server/server.js"]
+# Set default command to run PM2 logs
+CMD ["/usr/local/bin/node", "/usr/local/bin/pm2", "logs"]
