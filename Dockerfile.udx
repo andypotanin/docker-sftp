@@ -106,8 +106,11 @@ COPY --chown=udx:udx . /opt/sources/rabbitci/rabbit-ssh/
 # Set up worker configuration directories
 RUN mkdir -p /home/udx/.cd/configs /etc/worker && \
     chown -R udx:udx /home/udx/.cd && \
-    chmod -R 755 /home/udx/.cd && \
-    chmod -R 755 /etc/worker
+    chmod -R 777 /home/udx/.cd/configs && \
+    chmod -R 755 /etc/worker && \
+    touch /home/udx/.cd/configs/merged_worker.yml && \
+    chown udx:udx /home/udx/.cd/configs/merged_worker.yml && \
+    chmod 644 /home/udx/.cd/configs/merged_worker.yml
 
 # Set up entrypoint scripts
 COPY --chown=root:root bin/entrypoint.sh /usr/local/bin/
