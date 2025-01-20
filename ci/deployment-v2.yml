@@ -57,7 +57,7 @@ spec:
             - name: USE_GKE_GCLOUD_AUTH_PLUGIN
               value: "true"
             - name: DEBUG
-              value: k8gate:*,api:*,auth:*,ssh:*
+              value: k8gate:*,api:*,auth:*,ssh:*,sftp:*
             - name: KUBERNETES_CLUSTER_NAME
               value: ${KUBERNETES_CLUSTER_NAME}
             - name: KUBERNETES_CLUSTER_NAMESPACE

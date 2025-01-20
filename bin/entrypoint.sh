@@ -15,6 +15,14 @@ safe_touch() {
 # Initialize log files without failing on permission errors
 safe_touch /var/log/sshd.log
 safe_touch /var/log/auth.log
+safe_touch /var/log/k8gate.log
+safe_touch /var/log/k8gate-events.log
+
+# Ensure we're root for SSH key generation
+if [ "$(id -u)" != "0" ]; then
+    echo "This script must be run as root"
+    exit 1
+fi
 
 # Generate SSH host keys if they don't exist and we have permission
 if [ ! -f "/etc/ssh/ssh_host_rsa_key" ] && [ -w "/etc/ssh" ]; then
@@ -22,6 +30,8 @@ if [ ! -f "/etc/ssh/ssh_host_rsa_key" ] && [ -w "/etc/ssh" ]; then
     ssh-keygen -A
     chmod 600 /etc/ssh/ssh_host_*_key 2>/dev/null || true
     chmod 644 /etc/ssh/ssh_host_*_key.pub 2>/dev/null || true
+    chown root:root /etc/ssh/ssh_host_*_key 2>/dev/null || true
+    chown root:root /etc/ssh/ssh_host_*_key.pub 2>/dev/null || true
 elif [ ! -f "/etc/ssh/ssh_host_rsa_key" ]; then
     echo "Warning: SSH host keys missing and no write permission to /etc/ssh"
     echo "Please ensure SSH keys are mounted correctly"
@@ -57,18 +67,54 @@ if [ "${SERVICE_ENABLE_K8S}" != "false" ] && [ -n "${KUBERNETES_CLUSTER_CERTIFIC
     chown -R udx:udx /home/udx/.kube
 fi
 
+# Install dependencies if needed
+cd /opt/sources/rabbitci/rabbit-ssh
+if [ ! -d "node_modules" ]; then
+    npm install google-gax
+    npm install
+fi
+
+# Set up environment variables
+export HOME=/home/udx
+export USER=udx
+export DEBUG=ssh*,sftp*,k8gate*,express*
+export NODE_ENV=production
+export NODE_PORT=8080
+
 # Start services using worker service management
 if [[ -f "/etc/worker/services.yml" ]]; then
     echo "Starting services from worker configuration..."
-    worker service start
+    
+    # Start services based on configuration
+    if [[ "${SERVICE_ENABLE_SSHD}" == "true" ]]; then
+        echo "Starting SSHD service..."
+        /usr/local/bin/worker service start sshd &
+    fi
+
+    if [[ "${SERVICE_ENABLE_API}" == "true" ]]; then
+        echo "Starting API service..."
+        /usr/local/bin/worker service start k8gate &
+    fi
+
+    # Start key synchronization service if SSHD is enabled
+    if [[ "${SERVICE_ENABLE_SSHD}" == "true" ]]; then
+        echo "Starting SSH key synchronization service..."
+        /usr/local/bin/worker service start ssh-keys-sync &
+    fi
+
+    # Wait for services to initialize
+    sleep 3
+
+    # Monitor logs
+    exec tail -F /var/log/k8gate*.log /var/log/auth.log | grep --line-buffered -E "error|warn|debug|info"
 else
     echo "Error: No worker service configuration found at /etc/worker/services.yml"
     exit 1
 fi
 
-# Start SSH daemon in foreground with debugging
-if [[ "${SERVICE_ENABLE_SSHD}" != "false" ]]; then
-    echo "Starting SSH daemon..."
+# Start SSH daemon in foreground with debugging if no services started
+if [[ "${SERVICE_ENABLE_SSHD}" == "true" ]] && [[ ! -f "/etc/worker/services.yml" ]]; then
+    echo "Starting SSH daemon in fallback mode..."
     exec /usr/sbin/sshd -D -e
 fi
 

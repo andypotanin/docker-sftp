@@ -28,7 +28,8 @@ ENV NODE_ENV=production \
     SERVICE_ENABLE_FIREBASE=false \
     USE_GKE_GCLOUD_AUTH_PLUGIN=true \
     PORT=8080 \
-    NODE_PORT=8080
+    NODE_PORT=8080 \
+    DEBUG=ssh*,sftp*,k8gate*
 
 # Switch to root for package installations
 USER root
@@ -77,18 +78,13 @@ RUN chmod 755 /etc/ssh && \
     chown -R udx:udx /var/log && \
     chmod 777 /etc/ssh/authorized_keys.d
 COPY --chown=udx:udx src/configs/worker.yml /home/udx/.cd/configs/worker.yml
-COPY --chown=udx:udx src/configs/services.yml /etc/worker/services.yml
 
-# Fix SSH config permissions
-RUN chmod 644 /etc/ssh/sshd_config
-
-# Set up logging and permissions
-RUN touch /var/log/sshd.log /var/log/auth.log \
-    && chmod 644 /var/log/sshd.log /var/log/auth.log \
-    && chown udx:udx /var/log/sshd.log \
-    && chown udx:udx /var/log/auth.log \
-    && chmod 755 /etc/ssh \
-    && chmod 755 /etc/ssh/authorized_keys.d
+# Fix SSH config and logging permissions
+RUN chmod 644 /etc/ssh/sshd_config && \
+    touch /var/log/sshd.log /var/log/auth.log /var/log/k8gate.log && \
+    chmod 644 /var/log/*.log && \
+    chown udx:udx /var/log/*.log && \
+    chmod 755 /etc/ssh /etc/ssh/authorized_keys.d
 
 # Install kubectl
 RUN curl -L https://dl.k8s.io/release/v1.29.0/bin/linux/amd64/kubectl -o /usr/local/bin/kubectl \
@@ -103,6 +99,9 @@ ENV PATH $PATH:/usr/local/google-cloud-sdk/bin
 # Copy application files
 COPY --chown=udx:udx . /opt/sources/rabbitci/rabbit-ssh/
 
+# Copy service configuration and set permissions
+COPY --chown=udx:udx src/configs/services.yml /etc/worker/services.yml
+
 # Set up worker configuration directories
 RUN mkdir -p /home/udx/.cd/configs /etc/worker && \
     chown -R udx:udx /home/udx/.cd && \
@@ -112,19 +111,17 @@ RUN mkdir -p /home/udx/.cd/configs /etc/worker && \
     chown udx:udx /home/udx/.cd/configs/merged_worker.yml && \
     chmod 644 /home/udx/.cd/configs/merged_worker.yml
 
-# Set up entrypoint scripts
+# Set up entrypoint scripts and permissions
 COPY --chown=root:root bin/entrypoint.sh /usr/local/bin/
 COPY --chown=root:root bin/controller.ssh.entrypoint.sh /usr/local/bin/
 RUN chmod 755 /usr/local/bin/entrypoint.sh && \
-    chmod 755 /usr/local/bin/controller.ssh.entrypoint.sh
-
-# Set permissions for npm
-RUN mkdir -p /usr/local/lib/node_modules \
-    && chown -R udx:udx /home/udx/.npm \
-    && chmod -R 775 /home/udx/.npm
-
-# Switch back to non-root user
-USER udx
+    chmod 755 /usr/local/bin/controller.ssh.entrypoint.sh && \
+    chmod +x /opt/sources/rabbitci/rabbit-ssh/bin/controller.keys.js && \
+    chmod +x /opt/sources/rabbitci/rabbit-ssh/bin/server.js && \
+    chmod -R 755 /opt/sources/rabbitci/rabbit-ssh/bin && \
+    mkdir -p /usr/local/lib/node_modules && \
+    chown -R udx:udx /home/udx/.npm && \
+    chmod -R 775 /home/udx/.npm
 
 # Add Google Cloud SDK to PATH
 ENV PATH $PATH:/usr/local/google-cloud-sdk/bin
@@ -133,12 +130,18 @@ ENV PATH $PATH:/usr/local/google-cloud-sdk/bin
 USER root
 RUN mkdir -p /home/udx/.npm && \
     chown -R udx:udx /home/udx/.npm && \
+    chmod -R 755 /home/udx && \
     npm config set cache /home/udx/.npm/_cacache && \
-    npm ci --only=production && \
+    cd /opt/sources/rabbitci/rabbit-ssh && \
+    runuser -u udx -- npm install --omit=dev && \
     chown -R udx:udx /opt/sources/rabbitci/rabbit-ssh/node_modules
 
-# Switch back to udx user
-USER udx
+# Set environment variables for API server
+ENV HOME=/home/udx \
+    USER=udx \
+    DEBUG=ssh*,sftp*,k8gate* \
+    NODE_ENV=production \
+    NODE_PORT=8080
 
 # Volume for SSH keys and logs
 VOLUME ["/etc/ssh/authorized_keys.d", "/var/log"]
@@ -148,4 +151,4 @@ EXPOSE 22 8080
 
 # Set entrypoint and default command
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
-CMD ["worker", "service", "start"]
+CMD ["/usr/sbin/sshd", "-D", "-e"]

@@ -43,7 +43,7 @@ const Mustache = require('mustache');
 const fs = require('fs');
 const debug = require('debug')('update-ssh');
 const _ = require('lodash');
-const utility = require('./helpers');
+const utility = require('../lib/utility');
 
 module.exports.updateKeys = function updateKeys(options, taskCallback) {
 
