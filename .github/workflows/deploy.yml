@@ -58,36 +58,43 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Test container startup
+      - name: Test container startup and services
         run: |
           # Create test directories with proper permissions
-          mkdir -p /tmp/ssh/etc/ssh
-          chmod 755 /tmp/ssh/etc/ssh
+          mkdir -p /tmp/ssh/etc/ssh /tmp/ssh/home/udx/.cd/configs /tmp/ssh/etc/worker
+          chmod -R 755 /tmp/ssh/etc/ssh /tmp/ssh/home/udx/.cd/configs /tmp/ssh/etc/worker
           
-          # Run container with mounted volumes
-          docker run --rm \
-            -v /tmp/ssh/etc/ssh:/etc/ssh \
-            --name test-container \
-            ${{ env.REGISTRY }}/${{ env.DOCKER_REPO_PATH }}:${{ steps.version.outputs.TAG }} \
-            /bin/sh -c "ssh-keygen -A && chmod -R 755 /etc/ssh && ls -la /etc/ssh"
-          
-          # Verify SSH keys were generated
-          ls -la /tmp/ssh/etc/ssh/
-          
-          # Test SSH daemon startup
+          # Run container with mounted volumes for testing
           docker run -d --rm \
             -v /tmp/ssh/etc/ssh:/etc/ssh \
-            --name test-sshd \
+            -v /tmp/ssh/home/udx/.cd/configs:/home/udx/.cd/configs \
+            -v /tmp/ssh/etc/worker:/etc/worker \
+            --name test-container \
             ${{ env.REGISTRY }}/${{ env.DOCKER_REPO_PATH }}:${{ steps.version.outputs.TAG }}
           
-          # Wait for container to start
-          sleep 10
+          # Wait for services to start
+          sleep 15
           
           # Check container logs
-          docker logs test-sshd
+          docker logs test-container
+          
+          # Verify SSH keys and service status
+          docker exec test-container /bin/sh -c '
+            # Check SSH keys
+            ls -la /etc/ssh/ssh_host_* || exit 1
+            
+            # Check worker service status
+            worker service status || exit 1
+            
+            # Check SSHD process
+            pgrep sshd || exit 1
+            
+            # Check API health
+            curl -f http://localhost:8080/health || exit 1
+          '
           
           # Cleanup
-          docker stop test-sshd
+          docker stop test-container
 
       - name: Push Docker image
         if: github.event_name != 'pull_request'
