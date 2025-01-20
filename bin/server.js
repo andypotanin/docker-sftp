@@ -27,72 +27,102 @@
  * - DELETE /flushFirebaseContainers: Cleanup old containers
  */
 
-/**
- *
- * This is the SSH server that is used to connect to the Kubernetes cluster.
- * node ./server
- *
- */
-
 const axios = require('axios');
 const _ = require('lodash');
 const express = require('express');
 const https = require('https');
-const debug = require('debug')('ssh');
+const debug = require('debug')('k8gate:server');
 const { exec } = require('child_process');
 const util = require('util');
 const execAsync = util.promisify(exec);
 const app = express();
-let utility = require('../lib/utility');
+const utility = require('../lib/utility');
 const md5 = require('md5');
 const rateLimit = require('../lib/rate-limit');
 const events = require('../lib/events');
 
-// Access token from worker.yml secrets
-var accessToken = process.env.ACCESS_TOKEN;
-
-// Health check endpoint for Kubernetes
-app.get('/health', (req, res) => {
-    res.send({ status: 'ok' });
+// Uncaught exception handler
+process.on('uncaughtException', (err) => {
+    debug('Uncaught Exception: %O', err);
+    // Give time for logs to flush
+    setTimeout(() => process.exit(1), 1000);
 });
 
-// for SSH Entrypoint to get Kubernetes connection string that includes namespace and pod name
-// Health check endpoint for Cloud Run
-app.get('/health', async (req, res) => {
+// Unhandled rejection handler
+process.on('unhandledRejection', (reason, promise) => {
+    debug('Unhandled Rejection at: %O\nreason: %O', promise, reason);
+});
+
+// Graceful shutdown handler
+process.on('SIGTERM', () => {
+    debug('SIGTERM received, shutting down gracefully');
+    app.close(() => {
+        debug('HTTP server closed');
+        process.exit(0);
+    });
+});
+
+// Access token from worker.yml secrets
+const accessToken = process.env.ACCESS_TOKEN;
+
+// Configure axios defaults
+axios.defaults.timeout = 10000; // 10 second timeout
+axios.defaults.maxRedirects = 5;
+axios.defaults.httpsAgent = new https.Agent({ keepAlive: true });
+
+// Error handling middleware
+app.use((err, req, res, next) => {
+    debug('Error: %O', err);
+    res.status(500).json({
+        status: 'error',
+        message: err.message,
+        stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
+    });
+});
+
+// Health check endpoint with comprehensive checks
+app.get(['/health', '/_health'], async (req, res) => {
     try {
         // Check SSH daemon
         const sshStatus = await new Promise((resolve) => {
-            require('child_process').exec('pgrep sshd', (error) => {
+            exec('pgrep sshd', (error) => {
                 resolve(error ? false : true);
             });
         });
 
-        // Check state provider
-        let stateStatus = false;
-        try {
-            const stateProvider = utility.getStateProvider({
-                provider: process.env.STATE_PROVIDER || 'kubernetes'
-            });
-            await stateProvider.initialize();
-            stateStatus = true;
-        } catch (err) {
-            console.error('State provider health check failed:', err.message);
+        // Check Kubernetes connectivity if enabled
+        let k8sStatus = false;
+        if (process.env.KUBERNETES_CLUSTER_ENDPOINT) {
+            try {
+                const k8sResponse = await axios({
+                    method: 'get',
+                    url: `${process.env.KUBERNETES_CLUSTER_ENDPOINT}/api/v1/pods`,
+                    headers: {
+                        'Authorization': `Bearer ${process.env.KUBERNETES_CLUSTER_USER_TOKEN}`,
+                        'Accept': 'application/json'
+                    },
+                    timeout: 5000
+                });
+                k8sStatus = k8sResponse.status === 200;
+            } catch (err) {
+                debug('Kubernetes health check failed: %O', err);
+            }
         }
 
         // Overall health status
-        const isHealthy = sshStatus && stateStatus;
+        const isHealthy = sshStatus && (process.env.KUBERNETES_CLUSTER_ENDPOINT ? k8sStatus : true);
 
         res.status(isHealthy ? 200 : 503).json({
             status: isHealthy ? 'healthy' : 'unhealthy',
             timestamp: new Date().toISOString(),
             checks: {
                 ssh: sshStatus ? 'up' : 'down',
-                stateProvider: stateStatus ? 'up' : 'down'
+                kubernetes: process.env.KUBERNETES_CLUSTER_ENDPOINT ? (k8sStatus ? 'up' : 'down') : 'disabled'
             },
             version: process.env.npm_package_version || 'unknown'
         });
     } catch (error) {
-        console.error('Health check failed:', error);
+        debug('Health check failed: %O', error);
         res.status(500).json({
             status: 'error',
             error: error.message
@@ -104,46 +134,7 @@ app.get('/_cat/connection-string/:user', singleUserEndpoint);
 
 // list of all containers
 // Health check endpoint for Cloud Run
-app.get('/_health', async (req, res) => {
-    try {
-        // Check SSH daemon
-        await execAsync('pgrep sshd');
-        
-        // Check Kubernetes connectivity
-        const k8sResponse = await axios({
-            method: 'get',
-            url: process.env.KUBERNETES_CLUSTER_ENDPOINT + '/api/v1/pods',
-            headers: {
-                'Authorization': 'Bearer ' + process.env.KUBERNETES_CLUSTER_USER_TOKEN,
-                'Accept': 'application/json'
-            },
-            timeout: 5000
-        });
-        
-        if (k8sResponse.status === 200) {
-            res.status(200).json({
-                status: 'healthy',
-                ssh: true,
-                kubernetes: true,
-                timestamp: new Date().toISOString()
-            });
-        } else {
-            res.status(503).json({
-                status: 'unhealthy',
-                ssh: true,
-                kubernetes: false,
-                error: 'Kubernetes API returned non-200 status'
-            });
-        }
-    } catch (err) {
-        res.status(503).json({
-            status: 'unhealthy',
-            ssh: err.cmd === 'pgrep sshd' ? false : true,
-            kubernetes: err.cmd === 'pgrep sshd' ? true : false,
-            error: err.message
-        });
-    }
-});
+// Removed this endpoint as it's now combined with /health
 
 app.get('/users', userEndpoint);
 app.get('/apps', appEndpoint);
@@ -151,74 +142,74 @@ app.get('/v1/pods', getPods);
 app.delete('/flushFirebaseContainers', flushFirebaseContainers);
 app.use(singleEndpoint);
 
-// Listen on configured port with health check support
+// Listen on configured port with health check support and error handling
 const port = process.env.PORT || process.env.NODE_PORT || 8080;
-app.listen(port, '0.0.0.0', () => {
-    console.log(`k8-container-gate-server listening on port ${port}`);
-    serverOnline();
+const server = app.listen(port, '0.0.0.0', () => {
+    debug('k8-container-gate-server listening on port %d', port);
+    serverOnline().catch(err => {
+        debug('Server online initialization failed: %O', err);
+        process.exit(1);
+    });
 });
 
-var _containersStateHash = '';
+// Keep track of container state
+let _containersStateHash = '';
 
-process.env['NODE_TLS_REJECT_UNAUTHORIZED'] = 0;
+// Configure TLS (consider removing in production)
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 
-setInterval(function () {
-    var _container_url = process.env.KUBERNETES_CLUSTER_ENDPOINT ? 
-        process.env.KUBERNETES_CLUSTER_ENDPOINT + '/api/v1/pods' :
-        'http://localhost:' + process.env.NODE_PORT + '/v1/pods';
+// Container state update interval
+const updateInterval = setInterval(async () => {
+    try {
+        const _container_url = process.env.KUBERNETES_CLUSTER_ENDPOINT ? 
+            `${process.env.KUBERNETES_CLUSTER_ENDPOINT}/api/v1/pods` :
+            `http://localhost:${process.env.NODE_PORT}/v1/pods`;
 
-    axios({
-        method: 'get',
-        url: _container_url,
-        headers: { 'x-rabbit-internal-token': process.env.KUBERNETES_CLUSTER_USER_TOKEN }
-    })
-        .then(res => {
-            let body = _.get(res, 'data', {});
-            if (_.size(_.get(body, 'items', [])) === 0) {
-                console.error('No response from container lookup at [%s].', _container_url);
-                console.error(' -headers ', _.get(res, 'headers'));
-                //body = require('../static/fixtures/pods');
-                return false;
-            }
-
-            var _containers = body = _.map(body.items, function (singleItem) {
-                singleItem.Labels = _.get(singleItem, 'metadata.labels');
-                singleItem.Labels['ci.rabbit.name'] = _.get(singleItem.Labels,'name', null);
-                singleItem.Labels['ci.rabbit.ssh.user'] = _.get(singleItem.Labels,'ci.rabbit.ssh.user', null);
-                return singleItem;
-            });
-
-            var _checkString = '';
-            //console.log("_checkString1", _checkString);
-            (_containers || []).forEach(function (containerInfo) {
-                _checkString += _.get(containerInfo, 'metadata.name', '');
-            });
-
-            if (_containersStateHash === md5(_checkString)) {
-                console.log('SSH keys is up to date.');
-            } else {
-                console.log('Need to upgrade SSH keys.');
-                utility.updateKeys({
-                    keysPath: '/etc/ssh/authorized_keys.d',
-                    passwordFile: '/etc/passwd',
-                    passwordTemplate: 'alpine.passwords',
-                    accessToken: accessToken
-                }, function keysUpdated(error, data) {
-                    console.log('Updated state with [%s] SSH keys.', error || _.size(data.users));
-                    app.set('sshUser', data.users);
-                });
-            }
-            _containersStateHash = md5(_checkString);
-        })
-        .catch(err => {
-            console.error('No response from container lookup at [%s].', _container_url);
-            console.error(' -err ', err);
-            //console.error(" -headers ", _.get(resp, 'headers'));
-            //body = require('../static/fixtures/pods');
-            return false;
+        const response = await axios({
+            method: 'get',
+            url: _container_url,
+            headers: { 'x-rabbit-internal-token': process.env.KUBERNETES_CLUSTER_USER_TOKEN }
         });
 
-}, 60000);
+        const body = _.get(response, 'data', {});
+        if (_.size(_.get(body, 'items', [])) === 0) {
+            debug('No response from container lookup at [%s]', _container_url);
+            debug('Headers: %O', _.get(response, 'headers'));
+            return;
+        }
+
+        const _containers = body.items.map(singleItem => ({
+            ...singleItem,
+            Labels: {
+                ..._.get(singleItem, 'metadata.labels'),
+                'ci.rabbit.name': _.get(singleItem, 'metadata.labels.name'),
+                'ci.rabbit.ssh.user': _.get(singleItem, 'metadata.labels.ci.rabbit.ssh.user')
+            }
+        }));
+
+        const _checkString = _containers.map(container => 
+            _.get(container, 'metadata.name', '')).join('');
+
+        if (_containersStateHash === md5(_checkString)) {
+            debug('SSH keys are up to date');
+        } else {
+            debug('Updating SSH keys');
+            await utility.updateKeys({
+                containers: _containers,
+                accessToken: accessToken
+            });
+            _containersStateHash = md5(_checkString);
+        }
+    } catch (error) {
+        debug('Container state update failed: %O', error);
+    }
+}, 5000);
+
+// Cleanup on exit
+process.on('exit', () => {
+    clearInterval(updateInterval);
+    server.close();
+});
 
 /**
  *
@@ -361,7 +352,7 @@ function singleEndpoint(req, res) {
     res.send('ok!');
 }
 
-function serverOnline() {
+async function serverOnline() {
     console.log('k8-container-gate-server online!');
 
     var sshUser = app.get('sshUser') || {};
@@ -430,7 +421,7 @@ function serverOnline() {
     }
 
     // Initialize state management
-    initializeState();
+    await initializeState();
 
     // detect non-kubernetes
     if (process.env.KUBERNETES_CLUSTER_ENDPOINT) {

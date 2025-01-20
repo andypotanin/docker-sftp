@@ -35,12 +35,14 @@ jobs:
         username: ${{ secrets.DOCKER_HUB_USERNAME }}
         password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
     
+    - name: Pull base image
+      run: docker pull usabilitydynamics/udx-worker-nodejs:latest
+    
     - name: Build Docker image
       env:
         REGISTRY: ${{ secrets.DOCKER_HUB_USERNAME }}
         IMAGE_NAME: k8-container-gate
       run: |
-        # Use node:20-slim as base
         docker build \
           --tag ${REGISTRY}/${IMAGE_NAME}:${{ steps.version.outputs.TAG }} \
           --tag ${REGISTRY}/${IMAGE_NAME}:latest \
