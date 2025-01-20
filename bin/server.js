@@ -130,6 +130,15 @@ axios.defaults.timeout = 10000; // 10 second timeout
 axios.defaults.maxRedirects = 5;
 axios.defaults.httpsAgent = new https.Agent({ keepAlive: true });
 
+// Basic error handling middleware
+app.use((err, req, res, next) => {
+    debug('Error: %O', err);
+    res.status(500).json({
+        status: 'error',
+        message: err.message
+    });
+});
+
 // Error handling middleware
 app.use((err, req, res, next) => {
     debug('Error: %O', err);
@@ -204,11 +213,40 @@ app.use(singleEndpoint);
 
 // Listen on configured port with health check support and error handling
 const port = process.env.PORT || process.env.NODE_PORT || 8080;
+debug('Starting server initialization...');
 const server = app.listen(port, '0.0.0.0', () => {
     debug('k8-container-gate-server listening on port %d', port);
-    serverOnline().catch(err => {
+    debug('Server environment:', {
+        NODE_ENV: process.env.NODE_ENV,
+        DEBUG: process.env.DEBUG,
+        NODE_PORT: process.env.NODE_PORT,
+        HOME: process.env.HOME,
+        USER: process.env.USER
+    });
+    
+    serverOnline().then(() => {
+        debug('Server initialization complete');
+    }).catch(err => {
         debug('Server online initialization failed: %O', err);
+        console.error('Fatal error during server initialization:', err);
         process.exit(1);
+    });
+});
+
+// Handle process signals properly
+process.on('SIGTERM', () => {
+    debug('SIGTERM received, shutting down gracefully');
+    server.close(() => {
+        debug('HTTP server closed');
+        process.exit(0);
+    });
+});
+
+process.on('SIGINT', () => {
+    debug('SIGINT received, shutting down gracefully');
+    server.close(() => {
+        debug('HTTP server closed');
+        process.exit(0);
     });
 });
 

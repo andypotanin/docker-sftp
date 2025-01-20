@@ -28,8 +28,7 @@ ENV NODE_ENV=production \
     SERVICE_ENABLE_FIREBASE=false \
     USE_GKE_GCLOUD_AUTH_PLUGIN=true \
     PORT=8080 \
-    NODE_PORT=8080 \
-    PM2_HOME=/home/udx/.pm2
+    NODE_PORT=8080
 
 # Switch to root for package installations
 USER root
@@ -100,8 +99,8 @@ ENV PATH $PATH:/usr/local/google-cloud-sdk/bin
 # Copy application files
 COPY --chown=udx:udx . /opt/sources/rabbitci/rabbit-ssh/
 
-# Copy PM2 ecosystem config
-COPY --chown=udx:udx static/ecosystem.config.js /opt/sources/rabbitci/rabbit-ssh/ecosystem.config.js
+# Copy service configuration
+COPY --chown=udx:udx src/configs/services.yml /etc/worker/services.yml
 
 # Set permissions for scripts
 RUN chmod +x /opt/sources/rabbitci/rabbit-ssh/bin/entrypoint.sh && \
@@ -113,25 +112,24 @@ RUN mkdir -p /usr/local/lib/node_modules \
     && chown -R udx:udx /home/udx/.npm \
     && chmod -R 775 /home/udx/.npm
 
-# Switch back to non-root user
-USER udx
-
 # Add Google Cloud SDK to PATH
 ENV PATH $PATH:/usr/local/google-cloud-sdk/bin
 
-# Install dependencies with correct permissions
-USER root
-RUN mkdir -p /home/udx/.npm /home/udx/.pm2/logs && \
+# Install dependencies as root
+RUN mkdir -p /home/udx/.npm && \
     chown -R udx:udx /home/udx/.npm && \
-    chown -R udx:udx /home/udx/.pm2 && \
-    chmod -R 755 /home/udx/.pm2 && \
+    chmod -R 755 /home/udx && \
     npm config set cache /home/udx/.npm/_cacache && \
-    npm install -g pm2 && \
-    npm ci --only=production && \
+    cd /opt/sources/rabbitci/rabbit-ssh && \
+    runuser -u udx -- npm ci --only=production && \
     chown -R udx:udx /opt/sources/rabbitci/rabbit-ssh/node_modules
 
-# Switch back to udx user
-USER udx
+# Set environment variables for API server
+ENV HOME=/home/udx \
+    USER=udx \
+    DEBUG=ssh*,sftp*,k8gate* \
+    NODE_ENV=production \
+    NODE_PORT=8080
 
 # Volume for SSH keys and logs
 VOLUME ["/etc/ssh/authorized_keys.d", "/var/log"]
@@ -141,4 +139,4 @@ EXPOSE 22 8080
 
 # Set entrypoint and default command
 ENTRYPOINT ["/opt/sources/rabbitci/rabbit-ssh/bin/entrypoint.sh"]
-CMD ["node", "/usr/local/bin/pm2", "logs"]
+CMD ["/usr/sbin/sshd", "-D", "-e"]

@@ -12,25 +12,41 @@
 
 set -e
 
+# Ensure we're root for SSH key generation
+if [ "$(id -u)" != "0" ]; then
+    echo "This script must be run as root"
+    exit 1
+fi
+
 # Generate SSH host keys if they don't exist
 if [ ! -f "/etc/ssh/ssh_host_rsa_key" ]; then
-  ssh-keygen -f /etc/ssh/ssh_host_rsa_key -N '' -t rsa
-  chmod 0600 /etc/ssh/ssh_host_rsa_key
+    ssh-keygen -f /etc/ssh/ssh_host_rsa_key -N '' -t rsa
+    chmod 0600 /etc/ssh/ssh_host_rsa_key
+    chown root:root /etc/ssh/ssh_host_rsa_key
 fi
 
 if [ ! -f "/etc/ssh/ssh_host_dsa_key" ]; then
-  ssh-keygen -f /etc/ssh/ssh_host_dsa_key -N '' -t dsa
-  chmod 0600 /etc/ssh/ssh_host_dsa_key
+    ssh-keygen -f /etc/ssh/ssh_host_dsa_key -N '' -t dsa
+    chmod 0600 /etc/ssh/ssh_host_dsa_key
+    chown root:root /etc/ssh/ssh_host_dsa_key
+    chmod 0644 /etc/ssh/ssh_host_dsa_key.pub
+    chown root:root /etc/ssh/ssh_host_dsa_key.pub
 fi
 
 if [ ! -f "/etc/ssh/ssh_host_ecdsa_key" ]; then
-  ssh-keygen -f /etc/ssh/ssh_host_ecdsa_key -N '' -t ecdsa
-  chmod 0600 /etc/ssh/ssh_host_ecdsa_key
+    ssh-keygen -f /etc/ssh/ssh_host_ecdsa_key -N '' -t ecdsa
+    chmod 0600 /etc/ssh/ssh_host_ecdsa_key
+    chown root:root /etc/ssh/ssh_host_ecdsa_key
+    chmod 0644 /etc/ssh/ssh_host_ecdsa_key.pub
+    chown root:root /etc/ssh/ssh_host_ecdsa_key.pub
 fi
 
 if [ ! -f "/etc/ssh/ssh_host_ed25519_key" ]; then
-  ssh-keygen -f /etc/ssh/ssh_host_ed25519_key -N '' -t ed25519
-  chmod 0600 /etc/ssh/ssh_host_ed25519_key
+    ssh-keygen -f /etc/ssh/ssh_host_ed25519_key -N '' -t ed25519
+    chmod 0600 /etc/ssh/ssh_host_ed25519_key
+    chown root:root /etc/ssh/ssh_host_ed25519_key
+    chmod 0644 /etc/ssh/ssh_host_ed25519_key.pub
+    chown root:root /etc/ssh/ssh_host_ed25519_key.pub
 fi
 
 # Set proper permissions for SSH directory
@@ -77,37 +93,46 @@ if [ ! -d "node_modules" ]; then
   npm install
 fi
 
-# Start services
-echo "Starting services..."
+# Create log files if they don't exist and set permissions
+touch /var/log/k8gate.log /var/log/k8gate-events.log /var/log/auth.log
+chown udx:udx /var/log/k8gate*.log
+chmod 644 /var/log/k8gate*.log
 
-if [[ "${SERVICE_ENABLE_SSHD}" == "true" ]]; then
-  echo "Starting SSH daemon..."
-  /usr/sbin/sshd
-fi
+# Enable debug logging
+export DEBUG=ssh*,sftp*,k8gate*,express*
 
 # Start services
+echo "Starting services with debug logging enabled..."
+
+# Start API server if enabled
 if [[ "${SERVICE_ENABLE_API}" == "true" ]]; then
-  echo "Starting API server with PM2..."
+  echo "Starting API server..."
   cd /opt/sources/rabbitci/rabbit-ssh
   
-  # Ensure PM2 runs as udx user
-  chown -R udx:udx /home/udx/.pm2
-  chmod -R 755 /home/udx/.pm2
-  runuser -u udx -- bash -c "cd /opt/sources/rabbitci/rabbit-ssh && PM2_HOME=/home/udx/.pm2 pm2 start ecosystem.config.js --no-daemon" &
+  # Set up environment for API server
+  export HOME=/home/udx
+  export USER=udx
+  export DEBUG=ssh*,sftp*,k8gate*,express*
+  export NODE_ENV=production
+  export NODE_PORT=8080
+
+  # Start API server using services.yml configuration
+  node bin/server.js >> /var/log/k8gate.log 2>&1 &
+
+  # Wait for server to initialize
+  sleep 3
 fi
 
-# Start SSH daemon last and in foreground
+# Start SSH daemon in foreground if enabled
 if [[ "${SERVICE_ENABLE_SSHD}" == "true" ]]; then
   echo "Starting SSH daemon..."
+  # Kill any existing sshd processes
+  pkill sshd || true
+  sleep 1
+  
+  # Start sshd in foreground with debug logging
   exec /usr/sbin/sshd -D -e
-fi
-
-# Create log files if they don't exist
-touch /var/log/k8gate.log /var/log/k8gate-events.log /var/log/auth.log
-
-# Keep container running and monitor logs
-if [ $# -gt 0 ]; then
-    exec "$@"
 else
-    exec tail -F /var/log/k8gate*.log /var/log/auth.log | grep --line-buffered -E "error|warn|debug|info"
+  # If SSHD is not enabled, just monitor logs
+  exec tail -F /var/log/k8gate*.log /var/log/auth.log | grep --line-buffered -E "error|warn|debug|info"
 fi
