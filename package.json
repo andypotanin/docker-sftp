@@ -1,6 +1,6 @@
 {
     "name": "k8gate",
-    "version": "0.7.1",
+    "version": "0.8.0",
     "description": "Kubernetes SSH Gateway with SFTP and API support",
     "main": "bin/server.js",
     "scripts": {

@@ -28,7 +28,8 @@ ENV NODE_ENV=production \
     SERVICE_ENABLE_FIREBASE=false \
     USE_GKE_GCLOUD_AUTH_PLUGIN=true \
     PORT=8080 \
-    NODE_PORT=8080
+    NODE_PORT=8080 \
+    DEBUG=ssh*,sftp*,k8gate*
 
 # Switch to root for package installations
 USER root
@@ -55,10 +56,14 @@ RUN mkdir -p \
     /var/log \
     /usr/local/lib/node_modules \
     /home/udx/.npm \
-    /usr/local/bin && \
+    /usr/local/bin \
+    /home/udx/.worker && \
     ln -s /usr/bin/node /usr/local/bin/node && \
     chown -R udx:udx /home/udx && \
-    chmod -R 755 /home/udx/.cd/configs
+    chmod -R 777 /home/udx/.cd/configs && \
+    chmod -R 777 /home/udx/.worker && \
+    chmod -R 777 /etc/worker && \
+    chown -R udx:udx /etc/worker
 
 # Set up SSH configuration
 COPY --chown=root:root static/etc/ssh/ /etc/ssh/
@@ -97,9 +102,20 @@ COPY --chown=udx:udx . /opt/sources/rabbitci/rabbit-ssh/
 # Copy service configuration and set permissions
 COPY --chown=udx:udx src/configs/services.yml /etc/worker/services.yml
 
-# Set permissions for scripts and npm
-RUN chmod +x /opt/sources/rabbitci/rabbit-ssh/bin/entrypoint.sh && \
-    chmod +x /opt/sources/rabbitci/rabbit-ssh/bin/controller.ssh.entrypoint.sh && \
+# Set up worker configuration directories
+RUN mkdir -p /home/udx/.cd/configs /etc/worker && \
+    chown -R udx:udx /home/udx/.cd && \
+    chmod -R 777 /home/udx/.cd/configs && \
+    chmod -R 755 /etc/worker && \
+    touch /home/udx/.cd/configs/merged_worker.yml && \
+    chown udx:udx /home/udx/.cd/configs/merged_worker.yml && \
+    chmod 644 /home/udx/.cd/configs/merged_worker.yml
+
+# Set up entrypoint scripts and permissions
+COPY --chown=root:root bin/entrypoint.sh /usr/local/bin/
+COPY --chown=root:root bin/controller.ssh.entrypoint.sh /usr/local/bin/
+RUN chmod 755 /usr/local/bin/entrypoint.sh && \
+    chmod 755 /usr/local/bin/controller.ssh.entrypoint.sh && \
     chmod +x /opt/sources/rabbitci/rabbit-ssh/bin/controller.keys.js && \
     chmod +x /opt/sources/rabbitci/rabbit-ssh/bin/server.js && \
     chmod -R 755 /opt/sources/rabbitci/rabbit-ssh/bin && \
@@ -110,7 +126,8 @@ RUN chmod +x /opt/sources/rabbitci/rabbit-ssh/bin/entrypoint.sh && \
 # Add Google Cloud SDK to PATH
 ENV PATH $PATH:/usr/local/google-cloud-sdk/bin
 
-# Install dependencies as root
+# Install dependencies with correct permissions
+USER root
 RUN mkdir -p /home/udx/.npm && \
     chown -R udx:udx /home/udx/.npm && \
     chmod -R 755 /home/udx && \
@@ -133,5 +150,5 @@ VOLUME ["/etc/ssh/authorized_keys.d", "/var/log"]
 EXPOSE 22 8080
 
 # Set entrypoint and default command
-ENTRYPOINT ["/opt/sources/rabbitci/rabbit-ssh/bin/entrypoint.sh"]
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 CMD ["/usr/sbin/sshd", "-D", "-e"]
