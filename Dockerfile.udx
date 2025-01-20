@@ -2,7 +2,7 @@
 # This Dockerfile builds a container that provides SFTP access to Kubernetes pods
 #
 # Key Components:
-# - Base Image: usabilitydynamics/udx-worker-nodejs for Node.js support
+# - Base Image: node:20-slim for minimal Node.js runtime
 # - OpenSSH server for SFTP/SSH access
 # - Kubernetes tools (kubectl) for pod access
 # - Google Cloud SDK for GKE support
@@ -19,7 +19,10 @@
 # - USE_GKE_GCLOUD_AUTH_PLUGIN: Enable GKE auth plugin
 # - PORT/NODE_PORT: Service ports
 
-FROM usabilitydynamics/udx-worker-nodejs:latest
+FROM node:20-slim
+
+# Create udx user and group
+RUN groupadd -r udx && useradd -r -g udx -m udx
 
 # Set build arguments and environment variables
 ARG NODE_ENV=production

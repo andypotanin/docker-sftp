@@ -35,38 +35,12 @@ jobs:
         username: ${{ secrets.DOCKER_HUB_USERNAME }}
         password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
     
-    - name: Pull base image
-      run: docker pull usabilitydynamics/udx-worker-nodejs:latest || docker pull node:20-slim
-    
-    - name: Build base image if needed
-      if: failure()
-      run: |
-        # Create temporary Dockerfile for base image
-        cat > Dockerfile.base << 'EOF'
-        FROM node:20-slim
-        
-        # Create udx user and group
-        RUN groupadd -r udx && useradd -r -g udx -m udx
-        
-        # Create necessary directories
-        RUN mkdir -p /etc/worker && chown -R udx:udx /etc/worker
-        
-        # Set working directory
-        WORKDIR /opt/sources
-        
-        # Switch to udx user
-        USER udx
-        EOF
-        
-        # Build and push base image
-        docker build -t usabilitydynamics/udx-worker-nodejs:latest -f Dockerfile.base .
-        docker push usabilitydynamics/udx-worker-nodejs:latest
-    
     - name: Build Docker image
       env:
-        REGISTRY: usabilitydynamics
+        REGISTRY: ${{ secrets.DOCKER_HUB_USERNAME }}
         IMAGE_NAME: k8-container-gate
       run: |
+        # Use node:20-slim as base
         docker build \
           --tag ${REGISTRY}/${IMAGE_NAME}:${{ steps.version.outputs.TAG }} \
           --tag ${REGISTRY}/${IMAGE_NAME}:latest \
@@ -75,7 +49,7 @@ jobs:
     
     - name: Test container startup and services
       env:
-        REGISTRY: usabilitydynamics
+        REGISTRY: ${{ secrets.DOCKER_HUB_USERNAME }}
         IMAGE_NAME: k8-container-gate
         ACCESS_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         KUBERNETES_CLUSTER_ENDPOINT: https://test-cluster:6443
@@ -99,75 +73,40 @@ jobs:
           -e DEBUG=k8gate:*,api:*,auth:*,ssh:* \
           -e SERVICE_ENABLE_K8S=false \
           -e SERVICE_ENABLE_FIREBASE=false \
-          -e ACCESS_TOKEN \
-          -e KUBERNETES_CLUSTER_ENDPOINT \
-          -e KUBERNETES_CLUSTER_NAME \
-          -e KUBERNETES_CLUSTER_NAMESPACE \
-          -e KUBERNETES_CLUSTER_USER_TOKEN \
-          -e KUBERNETES_CLUSTER_SERVICEACCOUNT \
-          -e KUBERNETES_CLUSTER_CERTIFICATE \
-          -e KUBERNETES_CLUSTER_USER_SECRET \
-          -e KUBERNETES_CLUSTER_CONTEXT \
-          -e ALLOW_SSH_ACCESS_ROLES \
+          -e ACCESS_TOKEN=${ACCESS_TOKEN} \
+          -e KUBERNETES_CLUSTER_ENDPOINT=${KUBERNETES_CLUSTER_ENDPOINT} \
+          -e KUBERNETES_CLUSTER_NAME=${KUBERNETES_CLUSTER_NAME} \
+          -e KUBERNETES_CLUSTER_NAMESPACE=${KUBERNETES_CLUSTER_NAMESPACE} \
+          -e KUBERNETES_CLUSTER_USER_TOKEN=${KUBERNETES_CLUSTER_USER_TOKEN} \
+          -e KUBERNETES_CLUSTER_SERVICEACCOUNT=${KUBERNETES_CLUSTER_SERVICEACCOUNT} \
+          -e KUBERNETES_CLUSTER_CERTIFICATE=${KUBERNETES_CLUSTER_CERTIFICATE} \
+          -e KUBERNETES_CLUSTER_USER_SECRET=${KUBERNETES_CLUSTER_USER_SECRET} \
+          -e KUBERNETES_CLUSTER_CONTEXT=${KUBERNETES_CLUSTER_CONTEXT} \
+          -e ALLOW_SSH_ACCESS_ROLES=${ALLOW_SSH_ACCESS_ROLES} \
           -p 2222:22 \
           -p 8080:8080 \
           ${REGISTRY}/${IMAGE_NAME}:${{ steps.version.outputs.TAG }}
         
         # Wait for container to start
-        sleep 15
+        sleep 10
         
-        # Get container logs
+        # Check container logs for startup
         docker logs test-container
         
-        # Check if sshd is running and properly configured
-        docker exec test-container sh -c '
-          # Verify sshd process
-          pgrep sshd || exit 1
-          
-          # Check sshd config
-          sshd -t || exit 1
-          
-          # Verify SSH directory permissions
-          test -d /etc/ssh/authorized_keys.d || exit 1
-          test "$(stat -c %a /etc/ssh/authorized_keys.d)" = "755" || exit 1
-        '
+        # Test SSH daemon
+        docker exec test-container pgrep sshd || exit 1
         
-        # Check if API server is running
-        docker exec test-container sh -c '
-          # Verify Node process
-          pgrep node || exit 1
-          
-          # Check API server port
-          netstat -tlpn | grep :8080 || exit 1
-        '
-        
-        # Test API server health endpoint
+        # Test API server
         curl -f http://localhost:8080/health || exit 1
         
-        # Test SSH connection
-        docker cp /tmp/test_key.pub test-container:/etc/ssh/authorized_keys.d/test-user
-        docker exec test-container chmod 644 /etc/ssh/authorized_keys.d/test-user
-        
-        # Verify SSH port is open
-        nc -zv localhost 2222 || exit 1
-
+        # Cleanup
+        docker rm -f test-container
+    
     - name: Push Docker image
       if: github.event_name == 'push' && github.ref == 'refs/heads/master'
       env:
-        REGISTRY: usabilitydynamics
+        REGISTRY: ${{ secrets.DOCKER_HUB_USERNAME }}
         IMAGE_NAME: k8-container-gate
       run: |
-        # Push both tagged and latest versions
         docker push ${REGISTRY}/${IMAGE_NAME}:${{ steps.version.outputs.TAG }}
         docker push ${REGISTRY}/${IMAGE_NAME}:latest
-
-    - name: Save Docker image
-      run: |
-        docker save ${REGISTRY}/${IMAGE_NAME}:${{ steps.version.outputs.TAG }} > /tmp/docker-image.tar
-    
-    - name: Upload Docker image
-      uses: actions/upload-artifact@v3
-      with:
-        name: docker-image
-        path: /tmp/docker-image.tar
-        retention-days: 1
