@@ -77,27 +77,19 @@ if [ ! -d "node_modules" ]; then
   npm install
 fi
 
-# Start services based on configuration
-if [ -f "/etc/worker/services.yml" ]; then
-  echo "Starting services from worker configuration..."
-  worker service start
-else
-  echo "No worker service configuration found. Starting services directly..."
-  
-  if [[ "${SERVICE_ENABLE_SSHD}" == "true" ]]; then
-    echo "Starting SSH daemon..."
-    /usr/sbin/sshd -D &
-  fi
+# Start services
+echo "Starting services..."
 
-  if [[ "${SERVICE_ENABLE_SSHD}" == "true" ]]; then
-    echo "Running initial SSH key sync..."
-    node /usr/local/bin/controller.keys.js &
-  fi
+if [[ "${SERVICE_ENABLE_SSHD}" == "true" ]]; then
+  echo "Starting SSH daemon..."
+  /usr/sbin/sshd
+fi
 
-  if [[ "${SERVICE_ENABLE_API}" == "true" ]]; then
-    echo "Starting API server..."
-    node server.js &
-  fi
+if [[ "${SERVICE_ENABLE_API}" == "true" ]]; then
+  echo "Starting API server with PM2..."
+  cd /opt/sources/rabbitci/rabbit-ssh
+  pm2 start ecosystem.config.js
+  pm2 logs &
 fi
 
 # Create log files if they don't exist
