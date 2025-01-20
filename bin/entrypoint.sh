@@ -70,10 +70,12 @@ if [ "${SERVICE_ENABLE_K8S}" != "false" ]; then
   fi
 fi
 
-# Install dependencies
-cd /opt/app
-npm install google-gax
-npm install
+# Install dependencies if needed
+cd /opt/sources/rabbitci/rabbit-ssh
+if [ ! -d "node_modules" ]; then
+  npm install google-gax
+  npm install
+fi
 
 # Start services based on configuration
 if [ -f "/etc/worker/services.yml" ]; then
