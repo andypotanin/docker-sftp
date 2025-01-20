@@ -40,7 +40,7 @@ jobs:
     
     - name: Build Docker image
       env:
-        REGISTRY: ${{ github.event_name == 'push' && secrets.DOCKER_HUB_USERNAME || 'localhost' }}
+        REGISTRY: test
         IMAGE_NAME: k8-container-gate
       run: |
         # Build Docker image with version tag
@@ -55,7 +55,7 @@ jobs:
     
     - name: Test container startup and services
       env:
-        REGISTRY: ${{ github.event_name == 'push' && secrets.DOCKER_HUB_USERNAME || 'localhost' }}
+        REGISTRY: test
         IMAGE_NAME: k8-container-gate
         ACCESS_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         KUBERNETES_CLUSTER_ENDPOINT: https://test-cluster:6443

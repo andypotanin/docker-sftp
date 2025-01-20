@@ -1,51 +1,51 @@
-version: 1.0
+version: "1.0"
 services:
-  - name: sshd
-    command: /usr/sbin/sshd -D -f /etc/ssh/sshd_config -e
+  - name: "sshd"
+    command: "/usr/sbin/sshd -D -f /etc/ssh/sshd_config -e"
     autostart: true
     autorestart: true
-    user: root
-    envs:
-      - DEBUG=ssh:*,auth:*
-      - HOME=/root
-    log_file: /var/log/sshd.log
+    user: "root"
+    env:
+      DEBUG: "ssh:*,auth:*"
+      HOME: "/root"
+    log_file: "/var/log/sshd.log"
 
-  - name: k8gate
-    command: /usr/local/bin/node /opt/sources/rabbitci/rabbit-ssh/bin/server.js
+  - name: "k8gate"
+    command: "/usr/local/bin/node /opt/sources/rabbitci/rabbit-ssh/bin/server.js"
     autostart: true
     autorestart: true
-    user: udx
-    cwd: /opt/sources/rabbitci/rabbit-ssh
-    envs:
-      - DEBUG=k8gate:*,api:*,auth:*,ssh:*
-      - NODE_ENV=test
-      - PORT=8080
-      - NODE_PORT=8080
-      - HOME=/home/udx
-      - SERVICE_ENABLE_API=true
-      - SERVICE_ENABLE_SSHD=true
-    healthcheck:
+    user: "udx"
+    workdir: "/opt/sources/rabbitci/rabbit-ssh"
+    env:
+      DEBUG: "k8gate:*,api:*,auth:*,ssh:*"
+      NODE_ENV: "production"
+      PORT: "8080"
+      NODE_PORT: "8080"
+      HOME: "/home/udx"
+      SERVICE_ENABLE_API: "true"
+      SERVICE_ENABLE_SSHD: "true"
+    health:
       http:
         port: 8080
-        path: /health
+        path: "/health"
         interval: 30
         timeout: 10
         retries: 3
-    log_file: /var/log/k8gate.log
+    log_file: "/var/log/k8gate.log"
 
-  - name: ssh-keys-sync
-    command: /usr/local/bin/node /opt/sources/rabbitci/rabbit-ssh/bin/controller.keys.js
+  - name: "ssh-keys-sync"
+    command: "/usr/local/bin/node /opt/sources/rabbitci/rabbit-ssh/bin/controller.keys.js"
     autostart: true
     autorestart: true
-    user: udx
-    cwd: /opt/sources/rabbitci/rabbit-ssh
-    envs:
-      - DEBUG=ssh:keys:*,auth:*
-      - DIRECTORY_KEYS_BASE=/etc/ssh/authorized_keys.d
-      - PASSWORD_FILE=/etc/passwd
-      - PASSWORDS_TEMPLATE=alpine.passwords
-      - HOME=/home/udx
-    depends_on:
-      - sshd
+    user: "udx"
+    workdir: "/opt/sources/rabbitci/rabbit-ssh"
+    env:
+      DEBUG: "ssh:keys:*,auth:*"
+      DIRECTORY_KEYS_BASE: "/etc/ssh/authorized_keys.d"
+      PASSWORD_FILE: "/etc/passwd"
+      PASSWORDS_TEMPLATE: "alpine.passwords"
+      HOME: "/home/udx"
+    depends:
+      - "sshd"
     interval: 300
-    log_file: /var/log/ssh-keys-sync.log
+    log_file: "/var/log/ssh-keys-sync.log"
