@@ -28,7 +28,8 @@ ENV NODE_ENV=production \
     SERVICE_ENABLE_FIREBASE=false \
     USE_GKE_GCLOUD_AUTH_PLUGIN=true \
     PORT=8080 \
-    NODE_PORT=8080
+    NODE_PORT=8080 \
+    PM2_HOME=/home/node/.pm2
 
 # Switch to root for package installations
 USER root
@@ -103,6 +104,9 @@ ENV PATH $PATH:/usr/local/google-cloud-sdk/bin
 
 # Copy application files
 COPY --chown=node:node . /opt/sources/rabbitci/rabbit-ssh/
+
+# Copy PM2 ecosystem config
+COPY --chown=node:node static/ecosystem.config.js /opt/sources/rabbitci/rabbit-ssh/ecosystem.config.js
 
 # Set permissions for scripts
 RUN chmod +x /opt/sources/rabbitci/rabbit-ssh/bin/entrypoint.sh && \
