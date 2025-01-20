@@ -1,6 +1,26 @@
 #!/usr/local/bin/node
-
 /**
+ * GitHub SSH Key Controller for Docker SFTP Gateway
+ * 
+ * This script synchronizes SSH access by:
+ * 1. Getting running Docker applications and their GitHub IDs
+ * 2. Fetching GitHub collaborators for each application
+ * 3. Retrieving public SSH keys for each collaborator
+ * 4. Generating SSH authorized_keys files and system user accounts
+ * 
+ * Environment Variables:
+ * - DIRECTORY_KEYS_BASE: Base directory for authorized_keys (/etc/ssh/authorized_keys.d)
+ * - PASSWORD_FILE: System password file (/etc/passwd)
+ * - PASSWORDS_TEMPLATE: Template for password generation (alpine.passwords)
+ * - CONTROLLER_KEYS_PATH: Optional state file path (/var/lib/rabbit-ssh/state.json)
+ * 
+ * Usage:
+ * Production (Kubernetes):
+ *   DIRECTORY_KEYS_BASE=/etc/ssh/authorized_keys.d \
+ *   PASSWORD_FILE=/etc/passwd \
+ *   PASSWORDS_TEMPLATE=alpine.passwords \
+ *   controller.keys
+ *
  * Need to trigger when a docker "application" is launched and when a user changes their GitHub keys.
  *
  * 1. Get list of running Docker applications, extract the GitHub "id" of each application.

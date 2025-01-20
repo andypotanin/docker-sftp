@@ -1,8 +1,26 @@
 /**
+ * Firebase Consumer for Docker SFTP Gateway
+ * 
+ * This script monitors Firebase for container changes and updates SSH access:
+ * - Watches deployment collection for changes
+ * - Queues changes for processing
+ * - Updates SSH keys based on deployment changes
+ * - Runs periodic checks every 30 seconds
+ * 
+ * Environment Variables:
+ * - FIREBASE_PROJECT_ID: Firebase project ID
+ * - FIREBASE_PRIVATE_KEY_ID: Private key ID
+ * - FIREBASE_PRIVATE_KEY: Private key (with escaped newlines)
+ * - FIREBASE_CLIENT_EMAIL: Service account email
+ * - FIREBASE_CLIENT_ID: Client ID
+ * 
+ * Usage:
  * node opt/firebase.consume.js
- *
- * @type {admin}
+ * 
+ * Note: This script is part of the container lifecycle management system
+ * and works in conjunction with controller.keys.js
  */
+
 //var newrelic = require('newrelic')
 var admin = require('firebase-admin/lib/index');
 var _ = require( 'lodash' );
@@ -93,5 +111,3 @@ function maybeUpdateKeys() {
 setInterval(maybeUpdateKeys,30000);
 
 // Removed unused function
-
-

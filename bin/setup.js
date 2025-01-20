@@ -1,3 +1,20 @@
+/**
+ * Setup Script for Docker SFTP Gateway
+ * 
+ * This script handles the initial setup of the container:
+ * - Generates SSH host keys (RSA and DSA) with proper permissions
+ * - Configures Kubernetes cluster access if enabled
+ * - Installs Node.js dependencies
+ * 
+ * Environment Variables:
+ * - SERVICE_ENABLE_K8S: Enable Kubernetes setup
+ * - KUBERNETES_CLUSTER_*: Kubernetes configuration variables
+ * 
+ * Usage:
+ * This script is called by entrypoint.sh during container initialization
+ * It uses the debug module for logging with namespace 'k8gate:setup'
+ */
+
 const fs = require('fs');
 const { execSync } = require('child_process');
 const debug = require('debug')('k8gate:setup');

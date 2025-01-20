@@ -1,10 +1,19 @@
 /**
- * Flush Containers from Firebase
- *
- *
+ * Container Cleanup Utility for Docker SFTP Gateway
+ * 
+ * This script removes all container records from Firebase storage:
+ * - Connects to the container collection
+ * - Logs the number of containers found
+ * - Removes all container records
+ * - Provides error handling and reporting
+ * 
+ * Usage:
  * node bin/flush-containers.js
- *
+ * 
+ * Note: This is a maintenance utility that should be used with caution
+ * as it permanently removes container data from Firebase.
  */
+
 var utility = require( '../lib/utility' );
 var _ = require( 'lodash' );
 

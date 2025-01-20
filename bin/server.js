@@ -1,4 +1,33 @@
 /**
+ * API Server for Docker SFTP Gateway
+ * 
+ * This server provides:
+ * - SSH/SFTP connection management
+ * - Health checks for Kubernetes and Cloud Run
+ * - User management endpoints
+ * - Pod/container management
+ * - Rate limiting and access control
+ * 
+ * Key Features:
+ * - Health monitoring of SSH daemon and state provider
+ * - User authentication and authorization
+ * - Container lifecycle management
+ * - Firebase integration for container cleanup
+ * 
+ * Environment Variables:
+ * - ACCESS_TOKEN: Authentication token from worker.yml
+ * - NODE_PORT: Server port (default: 8080)
+ * - KUBERNETES_CLUSTER_ENDPOINT: K8s API endpoint
+ * - STATE_PROVIDER: State management backend (default: kubernetes)
+ * 
+ * Endpoints:
+ * - GET /health: Health check
+ * - GET /users/: List users
+ * - GET /v1/pods: List pods
+ * - DELETE /flushFirebaseContainers: Cleanup old containers
+ */
+
+/**
  *
  * This is the SSH server that is used to connect to the Kubernetes cluster.
  * node ./server
