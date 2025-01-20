@@ -94,7 +94,7 @@ RUN curl -L https://dl.k8s.io/release/v1.29.0/bin/linux/amd64/kubectl -o /usr/lo
 # Install Google Cloud SDK in /usr/local
 RUN curl -sSL https://sdk.cloud.google.com | bash -s -- --install-dir=/usr/local --disable-prompts \
     && /usr/local/google-cloud-sdk/bin/gcloud components install gke-gcloud-auth-plugin \
-    && chown -R udx:udx /usr/local/google-cloud-sdk
+    && chown -R node:node /usr/local/google-cloud-sdk
 ENV PATH $PATH:/usr/local/google-cloud-sdk/bin
 
 # Copy application files
@@ -133,11 +133,6 @@ VOLUME ["/etc/ssh/authorized_keys.d", "/var/log"]
 # Expose ports
 EXPOSE 22 8080
 
-# Set entrypoint
-ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
-
-# Expose ports
-EXPOSE 22 8080
-
-# Set default command to run PM2 logs
-CMD ["/usr/local/bin/node", "/usr/local/bin/pm2", "logs"]
+# Set entrypoint and default command
+ENTRYPOINT ["/opt/sources/rabbitci/rabbit-ssh/bin/entrypoint.sh"]
+CMD ["node", "/usr/local/bin/pm2", "logs"]

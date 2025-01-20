@@ -12,21 +12,30 @@
 
 set -e
 
-# generate fresh rsa key
+# Generate SSH host keys if they don't exist
 if [ ! -f "/etc/ssh/ssh_host_rsa_key" ]; then
   ssh-keygen -f /etc/ssh/ssh_host_rsa_key -N '' -t rsa
   chmod 0600 /etc/ssh/ssh_host_rsa_key
 fi
 
-# generate fresh dsa key
 if [ ! -f "/etc/ssh/ssh_host_dsa_key" ]; then
   ssh-keygen -f /etc/ssh/ssh_host_dsa_key -N '' -t dsa
   chmod 0600 /etc/ssh/ssh_host_dsa_key
 fi
 
-if [ -f "/etc/ssh/ssh_host_dsa_key" ]; then
+if [ ! -f "/etc/ssh/ssh_host_ecdsa_key" ]; then
+  ssh-keygen -f /etc/ssh/ssh_host_ecdsa_key -N '' -t ecdsa
   chmod 0600 /etc/ssh/ssh_host_ecdsa_key
 fi
+
+if [ ! -f "/etc/ssh/ssh_host_ed25519_key" ]; then
+  ssh-keygen -f /etc/ssh/ssh_host_ed25519_key -N '' -t ed25519
+  chmod 0600 /etc/ssh/ssh_host_ed25519_key
+fi
+
+# Set proper permissions for SSH directory
+chmod 755 /etc/ssh
+chmod 644 /etc/ssh/*.pub
 
 # Load worker configuration
 source /usr/local/lib/worker_config.sh
@@ -34,11 +43,11 @@ source /usr/local/lib/worker_config.sh
 # Only setup Kubernetes if enabled
 if [ "${SERVICE_ENABLE_K8S}" != "false" ]; then
   if [ "${KUBERNETES_CLUSTER_CERTIFICATE}" != "" ]; then
-    echo "Writing Kubernetes certificate to [/home/udx/.kube/kuberentes-ca.crt]"
-    cat /var/run/secrets/kubernetes.io/serviceaccount/ca.crt > /home/udx/.kube/kuberentes-ca.crt
+    echo "Writing Kubernetes certificate to [/home/node/.kube/kuberentes-ca.crt]"
+    cat /var/run/secrets/kubernetes.io/serviceaccount/ca.crt > /home/node/.kube/kuberentes-ca.crt
   fi
 
-  if [ -f /home/udx/.kube/kuberentes-ca.crt ]; then
+  if [ -f /home/node/.kube/kuberentes-ca.crt ]; then
     echo "Setting up Kubernetes [$KUBERNETES_CLUSTER_NAME] cluster with [$KUBERNETES_CLUSTER_NAMESPACE] namespace."
 
     kubectl config set-cluster ${KUBERNETES_CLUSTER_NAME} \
@@ -55,9 +64,9 @@ if [ "${SERVICE_ENABLE_K8S}" != "false" ]; then
 
     kubectl config use-context ${KUBERNETES_CLUSTER_NAMESPACE}
 
-    cp /root/.kube/config /home/udx/.kube/config
+    cp /root/.kube/config /home/node/.kube/config
 
-    chown -R udx:udx /home/udx/.kube
+    chown -R node:node /home/node/.kube
   fi
 fi
 
