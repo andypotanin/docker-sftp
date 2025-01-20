@@ -64,8 +64,10 @@ jobs:
         KUBERNETES_CLUSTER_CONTEXT: test-context
         ALLOW_SSH_ACCESS_ROLES: admin,maintain,write
       run: |
-        # Create test SSH key
+        # Create test SSH key and directories
         ssh-keygen -t rsa -f /tmp/test_key -N ""
+        mkdir -p /tmp/ssh/authorized_keys.d
+        cp /tmp/test_key.pub /tmp/ssh/authorized_keys.d/test-user
         
         # Start container with test configuration
         docker run -d --name test-container \
@@ -85,6 +87,10 @@ jobs:
           -e KUBERNETES_CLUSTER_USER_SECRET=${KUBERNETES_CLUSTER_USER_SECRET} \
           -e KUBERNETES_CLUSTER_CONTEXT=${KUBERNETES_CLUSTER_CONTEXT} \
           -e ALLOW_SSH_ACCESS_ROLES=${ALLOW_SSH_ACCESS_ROLES} \
+          -e DIRECTORY_KEYS_BASE=/etc/ssh/authorized_keys.d \
+          -e PASSWORD_FILE=/etc/passwd \
+          -e PASSWORDS_TEMPLATE=alpine.passwords \
+          -v /tmp/ssh/authorized_keys.d:/etc/ssh/authorized_keys.d \
           -p 2222:22 \
           -p 8080:8080 \
           ${REGISTRY}/${IMAGE_NAME}:${{ steps.version.outputs.TAG }}
@@ -100,6 +106,27 @@ jobs:
         
         # Test API server
         curl -f http://localhost:8080/health || exit 1
+        
+        # Test controller.keys.js
+        docker exec test-container node /usr/local/bin/controller.keys.js || exit 1
+        
+        # Verify SSH keys were processed
+        docker exec test-container test -f /etc/ssh/authorized_keys.d/test-user || exit 1
+        docker exec test-container test -f /etc/passwd || exit 1
+        
+        # Test SSH connection
+        docker exec test-container sh -c '
+          # Check sshd config
+          sshd -t || exit 1
+          
+          # Verify SSH directory permissions
+          test -d /etc/ssh/authorized_keys.d || exit 1
+          test "$(stat -c %a /etc/ssh/authorized_keys.d)" = "755" || exit 1
+          
+          # Verify key file permissions
+          test -f /etc/ssh/authorized_keys.d/test-user || exit 1
+          test "$(stat -c %a /etc/ssh/authorized_keys.d/test-user)" = "644" || exit 1
+        ' || exit 1
         
         # Cleanup
         docker rm -f test-container

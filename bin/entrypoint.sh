@@ -78,6 +78,11 @@ else
     /usr/sbin/sshd -D &
   fi
 
+  if [[ "${SERVICE_ENABLE_SSHD}" == "true" ]]; then
+    echo "Running initial SSH key sync..."
+    node /usr/local/bin/controller.keys.js &
+  fi
+
   if [[ "${SERVICE_ENABLE_API}" == "true" ]]; then
     echo "Starting API server..."
     node server.js &

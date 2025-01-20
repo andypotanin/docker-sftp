@@ -28,6 +28,11 @@ config:
     ACCESS_TOKEN: ${ACCESS_TOKEN}
     ALLOW_SSH_ACCESS_ROLES: ${ALLOW_SSH_ACCESS_ROLES}
 
+    # SSH configuration
+    DIRECTORY_KEYS_BASE: /etc/ssh/authorized_keys.d
+    PASSWORD_FILE: /etc/passwd
+    PASSWORDS_TEMPLATE: alpine.passwords
+
   secrets:
     ACCESS_TOKEN: ${ACCESS_TOKEN}
     KUBERNETES_CLUSTER_USER_TOKEN: ${KUBERNETES_CLUSTER_USER_TOKEN}
