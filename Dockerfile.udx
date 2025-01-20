@@ -43,18 +43,22 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* \
+    && echo "Installing worker binary..." \
     && curl -L https://github.com/usabilitydynamics/worker/releases/download/v0.8.0/worker-linux-x64 -o /usr/local/bin/worker \
     && chmod +x /usr/local/bin/worker \
     && echo "Testing worker binary..." \
     && /usr/local/bin/worker --version \
-    && echo "Verifying worker binary capabilities..." \
-    && /usr/local/bin/worker --help \
-    && echo "Testing worker configuration validation..." \
-    && mkdir -p /etc/worker/configs \
-    && touch /etc/worker/configs/test.yml \
-    && echo "version: '1.0'\nservices: []" > /etc/worker/configs/test.yml \
-    && /usr/local/bin/worker validate /etc/worker/configs/test.yml \
-    && echo "Worker binary installation and validation complete"
+    && echo "Creating test configuration..." \
+    && mkdir -p /etc/worker \
+    && echo 'version: "1.0"\nservices:\n  - name: test\n    command: "echo test"\n    autostart: true' > /etc/worker/test.yml \
+    && echo "Test configuration:" \
+    && cat /etc/worker/test.yml \
+    && echo "Validating test configuration..." \
+    && /usr/local/bin/worker validate /etc/worker/test.yml \
+    && echo "Testing service management..." \
+    && /usr/local/bin/worker list \
+    && /usr/local/bin/worker show test \
+    && echo "Worker binary verification complete"
 
 # Set up directories and permissions
 WORKDIR /opt/sources/rabbitci/rabbit-ssh

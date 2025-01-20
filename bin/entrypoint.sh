@@ -142,13 +142,25 @@ echo "Initializing worker daemon..."
     # Start services based on configuration
     echo "Starting services with worker..."
     worker_path=$(which worker)
-    
+
+    # Verify worker binary
+    echo "Worker binary location: $(which worker)"
+    echo "Worker version: $($worker_path --version)"
+
+    # Verify configuration file
+    echo "Worker configuration directory:"
+    ls -la /etc/worker/
+    echo "Services configuration:"
+    cat /etc/worker/services.yml
+
+    # List available services
     echo "Available services:"
-    $worker_path list --debug || { 
+    $worker_path list --debug || {
         echo "ERROR: Failed to list services"
-        echo "Worker configuration:"
-        ls -la /etc/worker/
-        cat /etc/worker/services.yml
+        echo "Worker debug output:"
+        $worker_path --debug list
+        echo "Configuration validation:"
+        $worker_path validate /etc/worker/services.yml || true
         exit 1
     }
     
