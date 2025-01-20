@@ -48,7 +48,7 @@ WORKDIR /opt/sources/rabbitci/rabbit-ssh
 # Create node user and group
 RUN groupadd -r node && useradd -r -g node -m node
 
-# Create required directories
+# Create required directories with correct ownership
 RUN mkdir -p \
     /home/node/.kube \
     /root/.ssh \
@@ -57,7 +57,11 @@ RUN mkdir -p \
     /etc/worker \
     /var/log \
     /usr/local/lib/node_modules \
-    /home/node/.npm
+    /home/node/.npm \
+    /usr/local/bin && \
+    ln -s /usr/bin/node /usr/local/bin/node && \
+    chown -R node:node /home/node && \
+    chmod -R 755 /home/node/.cd/configs
 
 # Set up SSH directories and permissions
 RUN rm -rf /etc/ssh/* && \

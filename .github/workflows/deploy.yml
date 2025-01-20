@@ -78,7 +78,7 @@ jobs:
           docker run -d --rm \
             -v /tmp/ssh/etc/ssh:/etc/ssh \
             --name test-sshd \
-            ${{ env.DOCKER_REPO_PATH }}:${{ steps.version.outputs.TAG }}
+            ${{ env.REGISTRY }}/${{ env.DOCKER_REPO_PATH }}:${{ steps.version.outputs.TAG }}
           
           # Wait for container to start
           sleep 10

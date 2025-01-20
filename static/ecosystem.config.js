@@ -11,9 +11,12 @@ module.exports = {
       DEBUG: 'ssh*,sftp*,k8gate*',
       SERVICE_ENABLE_SSHD: 'true',
       SERVICE_ENABLE_API: 'true',
-      NODE_PORT: '8080'
+      NODE_PORT: '8080',
+      HOME: '/home/node'
     },
     merge_logs: true,
-    log_date_format: 'YYYY-MM-DD HH:mm:ss Z'
+    log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
+    cwd: '/opt/sources/rabbitci/rabbit-ssh',
+    user: 'node'
   }]
 };
