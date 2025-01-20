@@ -103,10 +103,11 @@ COPY --chown=udx:udx . /opt/sources/rabbitci/rabbit-ssh/
 # Copy PM2 ecosystem config
 COPY --chown=udx:udx static/ecosystem.config.js /opt/sources/rabbitci/rabbit-ssh/ecosystem.config.js
 
-# Set permissions for scripts
-RUN chmod +x /opt/sources/rabbitci/rabbit-ssh/bin/entrypoint.sh && \
-    chmod +x /opt/sources/rabbitci/rabbit-ssh/bin/controller.ssh.entrypoint.sh && \
-    chmod -R 755 /opt/sources/rabbitci/rabbit-ssh/bin
+# Set up entrypoint scripts
+COPY --chown=root:root bin/entrypoint.sh /usr/local/bin/
+COPY --chown=root:root bin/controller.ssh.entrypoint.sh /usr/local/bin/
+RUN chmod 755 /usr/local/bin/entrypoint.sh && \
+    chmod 755 /usr/local/bin/controller.ssh.entrypoint.sh
 
 # Set permissions for npm
 RUN mkdir -p /usr/local/lib/node_modules \
@@ -140,5 +141,5 @@ VOLUME ["/etc/ssh/authorized_keys.d", "/var/log"]
 EXPOSE 22 8080
 
 # Set entrypoint and default command
-ENTRYPOINT ["/opt/sources/rabbitci/rabbit-ssh/bin/entrypoint.sh"]
-CMD ["node", "/usr/local/bin/pm2", "logs"]
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+CMD ["pm2", "start", "/opt/sources/rabbitci/rabbit-ssh/ecosystem.config.js", "--no-daemon"]

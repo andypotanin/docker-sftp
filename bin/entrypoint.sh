@@ -3,22 +3,28 @@ set -e
 
 echo "Starting SFTP Gateway container..."
 
-# Initialize log files
-touch /var/log/sshd.log /var/log/auth.log
-chown udx:udx /var/log/sshd.log /var/log/auth.log
-chmod 644 /var/log/sshd.log /var/log/auth.log
+# Function to safely create/modify files
+safe_touch() {
+    if [ ! -f "$1" ]; then
+        touch "$1" 2>/dev/null || true
+    fi
+    chmod 644 "$1" 2>/dev/null || true
+    chown udx:udx "$1" 2>/dev/null || true
+}
 
-# Set up SSH directories and permissions
-chmod 755 /etc/ssh
-chmod 755 /etc/ssh/authorized_keys.d
-chmod 644 /etc/ssh/sshd_config
+# Initialize log files without failing on permission errors
+safe_touch /var/log/sshd.log
+safe_touch /var/log/auth.log
 
-# Generate SSH host keys if they don't exist
-if [ ! -f "/etc/ssh/ssh_host_rsa_key" ]; then
+# Generate SSH host keys if they don't exist and we have permission
+if [ ! -f "/etc/ssh/ssh_host_rsa_key" ] && [ -w "/etc/ssh" ]; then
     echo "Generating SSH host keys..."
     ssh-keygen -A
-    chmod 600 /etc/ssh/ssh_host_*_key
-    chmod 644 /etc/ssh/ssh_host_*_key.pub
+    chmod 600 /etc/ssh/ssh_host_*_key 2>/dev/null || true
+    chmod 644 /etc/ssh/ssh_host_*_key.pub 2>/dev/null || true
+elif [ ! -f "/etc/ssh/ssh_host_rsa_key" ]; then
+    echo "Warning: SSH host keys missing and no write permission to /etc/ssh"
+    echo "Please ensure SSH keys are mounted correctly"
 fi
 
 # Load worker configuration if available
@@ -61,8 +67,16 @@ if [[ "${SERVICE_ENABLE_API}" != "false" ]]; then
     chown -R udx:udx /home/udx/.pm2
     chmod -R 755 /home/udx/.pm2
     
-    # Start PM2 as udx user
-    runuser -u udx -- bash -c "cd /opt/sources/rabbitci/rabbit-ssh && PM2_HOME=/home/udx/.pm2 pm2 start ecosystem.config.js"
+    # Start PM2 daemon as root first, then start app as udx
+    cd /opt/sources/rabbitci/rabbit-ssh
+    # Initialize PM2 daemon
+    PM2_HOME=/home/udx/.pm2 pm2 start ecosystem.config.js
+    # Ensure proper ownership after daemon start
+    chown -R udx:udx /home/udx/.pm2
+    # Wait for PM2 to be ready
+    sleep 2
+    # Restart app with proper user context
+    PM2_HOME=/home/udx/.pm2 sudo -u udx pm2 restart all
 fi
 
 # Start SSH daemon in foreground with debugging
