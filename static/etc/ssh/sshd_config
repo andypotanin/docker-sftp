@@ -1,29 +1,33 @@
+# SSH daemon configuration for Docker SFTP Gateway
 Port 22
 Protocol 2
 HostKey /etc/ssh/ssh_host_rsa_key
-HostKey /etc/ssh/ssh_host_dsa_key
 HostKey /etc/ssh/ssh_host_ecdsa_key
 HostKey /etc/ssh/ssh_host_ed25519_key
 
-SyslogFacility AUTH
-LogLevel INFO
-
+# Authentication
 PermitRootLogin no
-StrictModes yes
 PubkeyAuthentication yes
 AuthorizedKeysFile /etc/ssh/authorized_keys.d/%u
-
 PasswordAuthentication no
 ChallengeResponseAuthentication no
 UsePAM yes
 
+# SFTP configuration
+Subsystem sftp internal-sftp
+ForceCommand /opt/sources/rabbitci/rabbit-ssh/bin/controller.ssh.entrypoint.sh
+
+# Security
 AllowAgentForwarding no
 AllowTcpForwarding no
-GatewayPorts no
 X11Forwarding no
 PrintMotd no
 
-AcceptEnv LANG LC_*
-Subsystem sftp internal-sftp
+# Logging
+SyslogFacility AUTH
+LogLevel INFO
 
-ForceCommand /opt/sources/rabbitci/rabbit-ssh/bin/controller.ssh.entrypoint.sh
+# Other settings
+UseDNS no
+ClientAliveInterval 300
+ClientAliveCountMax 2
