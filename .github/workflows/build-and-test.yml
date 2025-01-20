@@ -40,14 +40,9 @@ jobs:
     
     - name: Build Docker image
       env:
-        REGISTRY: usabilitydynamics
+        REGISTRY: ${{ github.event_name == 'push' && secrets.DOCKER_HUB_USERNAME || 'localhost' }}
         IMAGE_NAME: k8-container-gate
       run: |
-        # Set default registry if not provided
-        if [ -z "$REGISTRY" ]; then
-          REGISTRY="localhost"
-        fi
-        
         # Build Docker image with version tag
         docker build \
           --tag ${REGISTRY}/${IMAGE_NAME}:${{ steps.version.outputs.TAG }} \
@@ -55,6 +50,7 @@ jobs:
           --build-arg NODE_ENV=test \
           --build-arg SERVICE_ENABLE_SSHD=true \
           --build-arg SERVICE_ENABLE_API=true \
+          --build-arg WORKER_DEBUG=true \
           -f Dockerfile.udx .
     
     - name: Test container startup and services
@@ -101,8 +97,9 @@ jobs:
           -e PASSWORD_FILE=/etc/passwd \
           -e PASSWORDS_TEMPLATE=alpine.passwords \
           -e STATE_PROVIDER=local \
+          -e WORKER_DEBUG=true \
           -v /etc/ssh/authorized_keys.d:/etc/ssh/authorized_keys.d:ro \
-          -v ${PWD}/.github/workflows/services.yml:/etc/worker/services.yml:ro \
+          -v ${PWD}/src/configs/services.yml:/etc/worker/services.yml:ro \
           -p 2222:22 \
           -p 8080:8080 \
           ${REGISTRY}/${IMAGE_NAME}:${{ steps.version.outputs.TAG }}
