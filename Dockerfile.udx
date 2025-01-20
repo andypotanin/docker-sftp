@@ -81,9 +81,7 @@ COPY --chown=node:node src/configs/worker.yml /home/node/.cd/configs/worker.yml
 COPY --chown=node:node src/configs/services.yml /etc/worker/services.yml
 
 # Fix SSH config permissions
-RUN chmod 600 /etc/ssh/ssh_host_* && \
-    chmod 644 /etc/ssh/ssh_host_*.pub && \
-    chmod 644 /etc/ssh/sshd_config
+RUN chmod 644 /etc/ssh/sshd_config
 
 # Set up logging and permissions
 RUN touch /var/log/sshd.log /var/log/auth.log \
@@ -127,6 +125,7 @@ USER root
 RUN mkdir -p /home/node/.npm && \
     chown -R node:node /home/node/.npm && \
     npm config set cache /home/node/.npm/_cacache && \
+    npm install -g pm2 && \
     npm ci --only=production && \
     chown -R node:node /opt/sources/rabbitci/rabbit-ssh/node_modules
 
