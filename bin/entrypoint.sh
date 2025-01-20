@@ -82,17 +82,51 @@ export NODE_ENV=production
 export NODE_PORT=8080
 
 # Start services using worker service management
-echo "Checking worker installation..."
-which worker || echo "worker not found in PATH"
-ls -l /usr/local/bin/worker* || echo "No worker binaries in /usr/local/bin"
-ls -l /etc/worker/services.yml || echo "services.yml not found"
+echo "Checking worker installation and configuration..."
 
-if [[ -f "/etc/worker/services.yml" ]]; then
-    echo "Starting services from worker configuration..."
-    echo "Worker binary location: $(which worker)"
-    echo "Worker version: $(worker --version || echo 'version command failed')"
-    echo "Services configuration:"
-    cat /etc/worker/services.yml
+# Check worker binary
+if ! command -v worker &> /dev/null; then
+    echo "Error: worker binary not found in PATH"
+    exit 1
+fi
+
+echo "Worker binary location: $(which worker)"
+echo "Worker version: $(worker --version || echo 'version check failed')"
+
+# Check services configuration
+if [ ! -f "/etc/worker/services.yml" ]; then
+    echo "Error: services.yml not found at /etc/worker/services.yml"
+    ls -l /etc/worker/ || echo "Worker config directory is empty or missing"
+    exit 1
+fi
+
+echo "Services configuration found:"
+cat /etc/worker/services.yml
+
+# Verify worker configuration directory
+echo "Worker configuration directory:"
+ls -la /etc/worker/
+
+# Validate services configuration
+echo "Validating services configuration..."
+/usr/local/bin/worker --debug validate /etc/worker/services.yml || {
+    echo "Failed to validate services configuration. Error code: $?"
+    exit 1
+}
+
+# List and verify available services
+echo "Available services:"
+/usr/local/bin/worker --debug list || {
+    echo "Failed to list services. Error code: $?"
+    exit 1
+}
+
+# Initialize worker daemon
+echo "Initializing worker daemon..."
+/usr/local/bin/worker --debug init || {
+    echo "Failed to initialize worker daemon. Error code: $?"
+    exit 1
+}
     
     # Start services based on configuration
     # List available services
