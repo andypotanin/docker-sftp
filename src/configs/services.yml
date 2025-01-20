@@ -1,51 +1,48 @@
 version: "1.0"
 services:
-  - id: "sshd"
-    name: "SSH Daemon"
-    command: "/usr/sbin/sshd -D -f /etc/ssh/sshd_config -e"
-    autostart: "${SERVICE_ENABLE_SSHD}"
+  - name: sshd
+    command: /usr/sbin/sshd -D -f /etc/ssh/sshd_config -e
+    autostart: ${SERVICE_ENABLE_SSHD}
     autorestart: true
-    user: "root"
+    user: root
     envs:
-      - "DEBUG=ssh:*,auth:*"
-      - "HOME=/root"
+      - DEBUG=ssh:*,auth:*
+      - HOME=/root
 
-  - id: "k8gate"
-    name: "K8Gate API Server"
-    command: "/usr/local/bin/node /opt/sources/rabbitci/rabbit-ssh/bin/server.js"
-    autostart: "${SERVICE_ENABLE_API}"
+  - name: k8gate
+    command: /usr/local/bin/node /opt/sources/rabbitci/rabbit-ssh/bin/server.js
+    autostart: ${SERVICE_ENABLE_API}
     autorestart: true
-    user: "udx"
-    cwd: "/opt/sources/rabbitci/rabbit-ssh"
+    user: udx
+    cwd: /opt/sources/rabbitci/rabbit-ssh
     envs:
-      - "DEBUG=k8gate:*,api:*,auth:*,ssh:*"
-      - "NODE_ENV=test"
-      - "PORT=8080"
-      - "NODE_PORT=8080"
-      - "HOME=/home/udx"
-      - "SERVICE_ENABLE_API=true"
-      - "SERVICE_ENABLE_SSHD=true"
+      - DEBUG=k8gate:*,api:*,auth:*,ssh:*
+      - NODE_ENV=production
+      - PORT=8080
+      - NODE_PORT=8080
+      - HOME=/home/udx
+      - SERVICE_ENABLE_API=true
+      - SERVICE_ENABLE_SSHD=true
     healthcheck:
       http:
-        port: "${NODE_PORT}"
-        path: "/health"
+        port: ${NODE_PORT}
+        path: /health
         interval: 30
         timeout: 10
         retries: 3
 
-  - id: "ssh-keys-sync"
-    name: "SSH Key Synchronization"
-    command: "/usr/local/bin/node /opt/sources/rabbitci/rabbit-ssh/bin/controller.keys.js"
-    autostart: "${SERVICE_ENABLE_SSHD}"
+  - name: ssh-keys-sync
+    command: /usr/local/bin/node /opt/sources/rabbitci/rabbit-ssh/bin/controller.keys.js
+    autostart: ${SERVICE_ENABLE_SSHD}
     autorestart: true
-    user: "udx"
-    cwd: "/opt/sources/rabbitci/rabbit-ssh"
+    user: udx
+    cwd: /opt/sources/rabbitci/rabbit-ssh
     envs:
-      - "DEBUG=ssh:keys:*,auth:*"
-      - "DIRECTORY_KEYS_BASE=/etc/ssh/authorized_keys.d"
-      - "PASSWORD_FILE=/etc/passwd"
-      - "PASSWORDS_TEMPLATE=alpine.passwords"
-      - "HOME=/home/udx"
+      - DEBUG=ssh:keys:*,auth:*
+      - DIRECTORY_KEYS_BASE=/etc/ssh/authorized_keys.d
+      - PASSWORD_FILE=/etc/passwd
+      - PASSWORDS_TEMPLATE=alpine.passwords
+      - HOME=/home/udx
     depends_on:
-      - "sshd"
+      - sshd
     interval: 300
