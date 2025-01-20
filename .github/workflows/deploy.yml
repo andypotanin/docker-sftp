@@ -68,7 +68,7 @@ jobs:
           docker run --rm \
             -v /tmp/ssh/etc/ssh:/etc/ssh \
             --name test-container \
-            ${{ env.DOCKER_REPO_PATH }}:${{ steps.version.outputs.TAG }} \
+            ${{ env.REGISTRY }}/${{ env.DOCKER_REPO_PATH }}:${{ steps.version.outputs.TAG }} \
             /bin/sh -c "ssh-keygen -A && chmod -R 755 /etc/ssh && ls -la /etc/ssh"
           
           # Verify SSH keys were generated
@@ -97,5 +97,5 @@ jobs:
           file: ./Dockerfile.udx
           push: true
           tags: |
-            ${{ env.DOCKER_REPO_PATH }}:${{ steps.version.outputs.TAG }}
-            ${{ env.DOCKER_REPO_PATH }}:latest
+            ${{ env.REGISTRY }}/${{ env.DOCKER_REPO_PATH }}:${{ steps.version.outputs.TAG }}
+            ${{ env.REGISTRY }}/${{ env.DOCKER_REPO_PATH }}:latest
