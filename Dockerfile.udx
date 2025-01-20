@@ -55,10 +55,14 @@ RUN mkdir -p \
     /var/log \
     /usr/local/lib/node_modules \
     /home/udx/.npm \
-    /usr/local/bin && \
+    /usr/local/bin \
+    /home/udx/.worker && \
     ln -s /usr/bin/node /usr/local/bin/node && \
     chown -R udx:udx /home/udx && \
-    chmod -R 755 /home/udx/.cd/configs
+    chmod -R 777 /home/udx/.cd/configs && \
+    chmod -R 777 /home/udx/.worker && \
+    chmod -R 777 /etc/worker && \
+    chown -R udx:udx /etc/worker
 
 # Set up SSH configuration
 COPY --chown=root:root static/etc/ssh/ /etc/ssh/
@@ -99,8 +103,11 @@ ENV PATH $PATH:/usr/local/google-cloud-sdk/bin
 # Copy application files
 COPY --chown=udx:udx . /opt/sources/rabbitci/rabbit-ssh/
 
-# Copy worker service configuration
-# Already copied in previous steps
+# Set up worker configuration directories
+RUN mkdir -p /home/udx/.cd/configs /etc/worker && \
+    chown -R udx:udx /home/udx/.cd && \
+    chmod -R 755 /home/udx/.cd && \
+    chmod -R 755 /etc/worker
 
 # Set up entrypoint scripts
 COPY --chown=root:root bin/entrypoint.sh /usr/local/bin/
