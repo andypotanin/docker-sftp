@@ -112,8 +112,16 @@ USER node
 # Add Google Cloud SDK to PATH
 ENV PATH $PATH:/usr/local/google-cloud-sdk/bin
 
-# Install dependencies
-RUN npm ci --only=production
+# Install dependencies with correct permissions
+USER root
+RUN mkdir -p /home/node/.npm && \
+    chown -R node:node /home/node/.npm && \
+    npm config set cache /home/node/.npm/_cacache && \
+    npm ci --only=production && \
+    chown -R node:node /opt/sources/rabbitci/rabbit-ssh/node_modules
+
+# Switch back to node user
+USER node
 
 # Volume for SSH keys and logs
 VOLUME ["/etc/ssh/authorized_keys.d", "/var/log"]
