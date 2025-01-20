@@ -57,26 +57,13 @@ if [ "${SERVICE_ENABLE_K8S}" != "false" ] && [ -n "${KUBERNETES_CLUSTER_CERTIFIC
     chown -R udx:udx /home/udx/.kube
 fi
 
-# Start API server with PM2 if enabled
-if [[ "${SERVICE_ENABLE_API}" != "false" ]]; then
-    echo "Starting API server with PM2..."
-    cd /opt/sources/rabbitci/rabbit-ssh
-    
-    # Ensure PM2 directories exist with correct permissions
-    mkdir -p /home/udx/.pm2/logs
-    chown -R udx:udx /home/udx/.pm2
-    chmod -R 755 /home/udx/.pm2
-    
-    # Start PM2 daemon as root first, then start app as udx
-    cd /opt/sources/rabbitci/rabbit-ssh
-    # Initialize PM2 daemon
-    PM2_HOME=/home/udx/.pm2 pm2 start ecosystem.config.js
-    # Ensure proper ownership after daemon start
-    chown -R udx:udx /home/udx/.pm2
-    # Wait for PM2 to be ready
-    sleep 2
-    # Restart app with proper user context
-    PM2_HOME=/home/udx/.pm2 sudo -u udx pm2 restart all
+# Start services using worker service management
+if [[ -f "/etc/worker/services.yml" ]]; then
+    echo "Starting services from worker configuration..."
+    worker service start
+else
+    echo "Error: No worker service configuration found at /etc/worker/services.yml"
+    exit 1
 fi
 
 # Start SSH daemon in foreground with debugging
