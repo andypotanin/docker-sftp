@@ -65,19 +65,25 @@ RUN mkdir -p \
 
 # Set up SSH directories and permissions
 RUN rm -rf /etc/ssh/* && \
-    mkdir -p /etc/ssh/authorized_keys.d && \
+    mkdir -p /etc/ssh/authorized_keys.d /run/sshd && \
     chmod 755 /etc/ssh && \
     chmod 755 /etc/ssh/authorized_keys.d && \
+    chmod 755 /run/sshd && \
+    chown -R root:root /etc/ssh && \
     chown -R node:node /home/node && \
     chown -R node:node /opt/sources/rabbitci && \
-    chown -R node:node /etc/ssh && \
     chown -R node:node /var/log && \
     chmod 777 /etc/ssh/authorized_keys.d
 
 # Copy SSH configuration and worker configs
-COPY --chown=node:node static/etc/ssh/ /etc/ssh/
+COPY --chown=root:root static/etc/ssh/ /etc/ssh/
 COPY --chown=node:node src/configs/worker.yml /home/node/.cd/configs/worker.yml
 COPY --chown=node:node src/configs/services.yml /etc/worker/services.yml
+
+# Fix SSH config permissions
+RUN chmod 600 /etc/ssh/ssh_host_* && \
+    chmod 644 /etc/ssh/ssh_host_*.pub && \
+    chmod 644 /etc/ssh/sshd_config
 
 # Set up logging and permissions
 RUN touch /var/log/sshd.log /var/log/auth.log \
