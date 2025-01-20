@@ -67,9 +67,12 @@ COPY --chown=udx:udx . .
 # Set permissions for executables and npm
 RUN mkdir -p /usr/local/lib/node_modules \
     && chmod +x bin/entrypoint.sh \
+    && chmod +x bin/server.js \
     && mkdir -p /home/udx/.npm \
     && chown -R udx:udx /home/udx/.npm \
-    && chmod -R 775 /home/udx/.npm
+    && chmod -R 775 /home/udx/.npm \
+    && chown -R udx:udx /opt/sources/k8gate/server/bin \
+    && chmod -R 755 /opt/sources/k8gate/server/bin
 
 # Switch back to non-root user
 USER udx
@@ -87,4 +90,4 @@ VOLUME [ "/etc/ssh/authorized_keys.d", "/var/log" ]
 EXPOSE 22 8080
 
 # Set entrypoint
-ENTRYPOINT ["bin/entrypoint.sh"]
+ENTRYPOINT ["./bin/entrypoint.sh"]
