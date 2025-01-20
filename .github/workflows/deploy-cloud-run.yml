@@ -11,9 +11,8 @@ on:
 
 env:
   CLOUD_RUN_PROJECT_ID: destinationpickleball-com-8173
-  K8S_PROJECT_ID: rabbit-cdmsqarskcacnbpe
   REGION: us-central1
-  SERVICE_NAME: k8-container-gate
+  SERVICE_NAME: sftp-api
 
 jobs:
   deploy:
@@ -48,65 +47,44 @@ jobs:
       with:
         version: '>= 363.0.0'
         project_id: ${{ env.CLOUD_RUN_PROJECT_ID }}
-        
-    - name: Get K8s Credentials
-      id: k8s-creds
+
+    - name: Configure Docker for GCR
       run: |
-        # Get GKE cluster credentials from K8s project
-        gcloud container clusters get-credentials \
-          ${{ secrets.GKE_CLUSTER_NAME }} \
-          --region=${{ env.REGION }} \
-          --project=${{ env.K8S_PROJECT_ID }}
+        gcloud auth configure-docker gcr.io
         
-        # Create service account key for K8s access
-        gcloud iam service-accounts keys create k8s-key.json \
-          --iam-account=${{ secrets.K8S_SERVICE_ACCOUNT }} \
-          --project=${{ env.K8S_PROJECT_ID }}
-        
-        # Store the key as a secret in Cloud Run project
-        gcloud secrets create k8s-auth-key \
-          --project=${{ env.CLOUD_RUN_PROJECT_ID }} \
-          --data-file=k8s-key.json \
-          --replication-policy=automatic || true
-        
-        # Get latest version
-        echo "SECRET_VERSION=$(gcloud secrets versions list k8s-auth-key --project=${{ env.CLOUD_RUN_PROJECT_ID }} --format='value(name)' | sort -rn | head -n1)" >> $GITHUB_OUTPUT
-    
-    - name: Deploy to Cloud Run
-      id: deploy
+    - name: Copy image to GCR
       env:
         REGISTRY: usabilitydynamics
         IMAGE_NAME: k8-container-gate
+        GCR_HOSTNAME: gcr.io
       run: |
-        # Deploy service
-        gcloud run deploy ${{ env.SERVICE_NAME }} \
-          --image=${REGISTRY}/${IMAGE_NAME}:${{ steps.version.outputs.TAG }} \
+        # Pull from Docker Hub
+        docker pull ${REGISTRY}/${IMAGE_NAME}:${{ steps.version.outputs.TAG }}
+        
+        # Tag for GCR
+        docker tag ${REGISTRY}/${IMAGE_NAME}:${{ steps.version.outputs.TAG }} \
+          ${GCR_HOSTNAME}/${{ env.CLOUD_RUN_PROJECT_ID }}/${IMAGE_NAME}:${{ steps.version.outputs.TAG }}
+        
+        # Push to GCR
+        docker push ${GCR_HOSTNAME}/${{ env.CLOUD_RUN_PROJECT_ID }}/${IMAGE_NAME}:${{ steps.version.outputs.TAG }}
+
+    - name: Generate Cloud Run Config
+      env:
+        DOCKER_REGISTRY: gcr.io/${{ env.CLOUD_RUN_PROJECT_ID }}
+        IMAGE_NAME: k8-container-gate
+        IMAGE_TAG: ${{ steps.version.outputs.TAG }}
+        GCP_SERVICE_ACCOUNT: ${{ secrets.CLOUD_RUN_SERVICE_ACCOUNT }}
+        GITHUB_TOKEN_SECRET_NAME: github-access-token
+      run: |
+        # Replace variables in cloud-run.yml
+        envsubst < src/configs/cloud-run.yml > /tmp/cloud-run-config.yml
+    
+    - name: Deploy to Cloud Run
+      run: |
+        gcloud beta run services replace /tmp/cloud-run-config.yml \
           --platform=managed \
           --region=${{ env.REGION }} \
-          --project=${{ env.CLOUD_RUN_PROJECT_ID }} \
-          --port=8080 \
-          --memory=512Mi \
-          --cpu=1 \
-          --timeout=300 \
-          --service-account=${{ secrets.CLOUD_RUN_SERVICE_ACCOUNT }} \
-          --set-env-vars="NODE_ENV=production" \
-          --set-env-vars="SERVICE_ENABLE_SSHD=true" \
-          --set-env-vars="SERVICE_ENABLE_API=true" \
-          --set-env-vars="SERVICE_ENABLE_FIREBASE=false" \
-          --set-env-vars="DEBUG=k8gate:*,api:*,auth:*,ssh:*" \
-          --set-env-vars="KUBERNETES_CLUSTER_NAME=${{ secrets.GKE_CLUSTER_NAME }}" \
-          --set-env-vars="KUBERNETES_CLUSTER_NAMESPACE=${{ secrets.KUBERNETES_CLUSTER_NAMESPACE }}" \
-          --set-env-vars="KUBERNETES_CLUSTER_ENDPOINT=https://${{ secrets.GKE_CLUSTER_ENDPOINT }}" \
-          --set-env-vars="KUBERNETES_CLUSTER_SERVICEACCOUNT=${{ secrets.K8S_SERVICE_ACCOUNT }}" \
-          --set-env-vars="KUBERNETES_CLUSTER_CONTEXT=${{ secrets.KUBERNETES_CLUSTER_CONTEXT }}" \
-          --set-env-vars="ALLOW_SSH_ACCESS_ROLES=${{ secrets.ALLOW_SSH_ACCESS_ROLES }}" \
-          --set-env-vars="GCP_PROJECT_ID=${{ env.K8S_PROJECT_ID }}" \
-          --set-env-vars="GKE_CLUSTER_NAME=${{ secrets.GKE_CLUSTER_NAME }}" \
-          --set-env-vars="GKE_CLUSTER_REGION=${{ env.REGION }}" \
-          --set-secrets="K8S_SERVICE_ACCOUNT_KEY=k8s-auth-key:${{ steps.k8s-creds.outputs.SECRET_VERSION }}" \
-          --set-secrets="GITHUB_ACCESS_TOKEN=github-access-token:latest" \
-          --allow-unauthenticated \
-          --use-http2
+          --project=${{ env.CLOUD_RUN_PROJECT_ID }}
         
         # Get service URL
         echo "SERVICE_URL=$(gcloud run services describe ${{ env.SERVICE_NAME }} --region=${{ env.REGION }} --format='value(status.url)')" >> $GITHUB_OUTPUT
