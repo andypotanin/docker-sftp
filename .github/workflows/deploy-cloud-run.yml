@@ -13,7 +13,7 @@ env:
   CLOUD_RUN_PROJECT_ID: destinationpickleball-com-8173
   K8S_PROJECT_ID: rabbit-cdmsqarskcacnbpe
   REGION: us-central1
-  SERVICE_NAME: k8gate
+  SERVICE_NAME: k8-container-gate
 
 jobs:
   deploy:
@@ -76,7 +76,7 @@ jobs:
       id: deploy
       env:
         REGISTRY: usabilitydynamics
-        IMAGE_NAME: k8gate
+        IMAGE_NAME: k8-container-gate
       run: |
         # Deploy service
         gcloud run deploy ${{ env.SERVICE_NAME }} \

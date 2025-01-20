@@ -2,12 +2,12 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: GITHUB_ORG-sftp-GITHUB_BRANCH
+  name: k8-container-gate
   labels:
-    name: GITHUB_ORG-sftp-GITHUB_BRANCH
-    git.name: docker-sftp
-    git.owner: GITHUB_ORG
-    git.branch: GITHUB_BRANCH
+    app: k8-container-gate
+    git.name: k8-container-gate
+    git.owner: usabilitydynamics
+    git.branch: master
 spec:
   type: LoadBalancer
   ports:
@@ -18,6 +18,6 @@ spec:
       port: 8080
       targetPort: 8080
   selector:
-    name: GITHUB_ORG-sftp-GITHUB_BRANCH
-    git.name: docker-sftp
-    git.branch: GITHUB_BRANCH
+    app: k8-container-gate
+    git.name: k8-container-gate
+    git.branch: master

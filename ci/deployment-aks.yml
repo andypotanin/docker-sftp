@@ -1,22 +1,22 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: k8gate
+  name: k8-container-gate
   labels:
-    app: k8gate
+    app: k8-container-gate
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: k8gate
+      app: k8-container-gate
   template:
     metadata:
       labels:
-        app: k8gate
+        app: k8-container-gate
     spec:
       containers:
-      - name: k8gate
-        image: usabilitydynamics/k8gate:latest
+      - name: k8-container-gate
+        image: usabilitydynamics/k8-container-gate:latest
         ports:
         - containerPort: 22
           name: ssh
@@ -51,36 +51,36 @@ spec:
         - name: KUBERNETES_CLUSTER_NAME
           valueFrom:
             configMapKeyRef:
-              name: k8gate-config
+              name: k8-container-gate-config
               key: cluster_name
         - name: KUBERNETES_CLUSTER_NAMESPACE
           valueFrom:
             configMapKeyRef:
-              name: k8gate-config
+              name: k8-container-gate-config
               key: namespace
         - name: KUBERNETES_CLUSTER_ENDPOINT
           valueFrom:
             configMapKeyRef:
-              name: k8gate-config
+              name: k8-container-gate-config
               key: cluster_endpoint
         - name: KUBERNETES_CLUSTER_SERVICEACCOUNT
           valueFrom:
             configMapKeyRef:
-              name: k8gate-config
+              name: k8-container-gate-config
               key: serviceaccount
         - name: KUBERNETES_CLUSTER_CONTEXT
           valueFrom:
             configMapKeyRef:
-              name: k8gate-config
+              name: k8-container-gate-config
               key: context
         - name: ALLOW_SSH_ACCESS_ROLES
           valueFrom:
             configMapKeyRef:
-              name: k8gate-config
+              name: k8-container-gate-config
               key: ssh_access_roles
         envFrom:
         - secretRef:
-            name: k8gate-secrets
+            name: k8-container-gate-secrets
         livenessProbe:
           httpGet:
             path: /health
@@ -99,27 +99,27 @@ spec:
           failureThreshold: 2
         resources:
           requests:
-            memory: "256Mi"
-            cpu: "100m"
+            cpu: 200m
+            memory: 256Mi
           limits:
-            memory: "512Mi"
-            cpu: "500m"
+            cpu: 1
+            memory: 512Mi
       volumes:
       - name: ssh-keys
         emptyDir: {}
       - name: worker-config
         configMap:
-          name: k8gate-worker-config
+          name: k8-container-gate-worker-config
       - name: services-config
         configMap:
-          name: k8gate-services-config
+          name: k8-container-gate-services-config
       - name: logs
         emptyDir: {}
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: k8gate
+  name: k8-container-gate
 spec:
   type: LoadBalancer
   ports:
@@ -128,12 +128,12 @@ spec:
   - port: 8080
     targetPort: 8080
   selector:
-    app: k8gate
+    app: k8-container-gate
 ---
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: k8gate-config
+  name: k8-container-gate-config
 data:
   cluster_name: ${KUBERNETES_CLUSTER_NAME}
   namespace: ${KUBERNETES_CLUSTER_NAMESPACE}
@@ -145,22 +145,18 @@ data:
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: k8gate-worker-config
+  name: k8-container-gate-worker-config
 data:
   worker.yml: |
     kind: workerConfig
     version: udx.io/worker-v1/config
-    config:
-      env:
-        NODE_ENV: production
-        PORT: "8080"
-        NODE_PORT: "8080"
-        DEBUG: k8gate:*,api:*,auth:*,ssh:*
+    logLevel: debug
+    logFormat: json
 ---
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: k8gate-services-config
+  name: k8-container-gate-services-config
 data:
   services.yml: |
     kind: workerService
@@ -170,17 +166,15 @@ data:
         command: /usr/sbin/sshd -D -f /etc/ssh/sshd_config -e
         autostart: true
         autorestart: true
-        env:
-          DEBUG: ssh:*,auth:*
-      - name: k8gate
-        command: node /opt/sources/k8gate/server/bin/server.js | tee -a /var/log/k8gate.log
+        envs:
+          - DEBUG=ssh:*,auth:*
+      
+      - name: k8-container-gate
+        command: node /opt/sources/k8gate/server/bin/server.js 2>&1 | tee -a /var/log/k8gate.log
         autostart: true
         autorestart: true
-        env:
-          DEBUG: k8gate:*,api:*,auth:*
-      - name: log-monitor
-        command: tail -F /var/log/k8gate*.log /var/log/auth.log | grep --line-buffered -E "error|warn|debug|info"
-        autostart: true
-        autorestart: true
-        env:
-          DEBUG: monitor:*
+        envs:
+          - DEBUG=k8gate:*,api:*,auth:*
+          - NODE_ENV=production
+          - PORT=8080
+          - NODE_PORT=8080

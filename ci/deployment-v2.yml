@@ -2,94 +2,107 @@
 kind: Deployment
 apiVersion: apps/v1
 metadata:
-  name: GITHUB_ORG-sftp-GITHUB_BRANCH
+  name: k8-container-gate
   labels:
-    name: GITHUB_ORG-sftp-GITHUB_BRANCH
+    app: k8-container-gate
     git.name: k8-container-gate
-    git.owner: GITHUB_ORG
-    git.branch: GITHUB_BRANCH
+    git.owner: usabilitydynamics
+    git.branch: master
 spec:
   selector:
     matchLabels:
-      name: GITHUB_ORG-sftp-GITHUB_BRANCH
-  # how many pods and indicate which strategy we want for rolling update
+      app: k8-container-gate
   replicas: 1
   minReadySeconds: 10
   template:
     metadata:
       labels:
-        name: GITHUB_ORG-sftp-GITHUB_BRANCH
+        app: k8-container-gate
         git.name: k8-container-gate
-        git.owner: GITHUB_ORG
-        git.branch: GITHUB_BRANCH
+        git.owner: usabilitydynamics
+        git.branch: master
       annotations:
-        container.apparmor.security.beta.kubernetes.io/sftp: runtime/default
+        container.apparmor.security.beta.kubernetes.io/k8-container-gate: runtime/default
     spec:
-      serviceAccountName: "CLUSTER_SERVICEACCOUNT_VALUE"
+      serviceAccountName: k8-container-gate
       containers:
-        - name: sftp
-          #image: gcr.io/$PROJECT_ID/$IMAGE:$GITHUB_SHA
-          image: "usabilitydynamics/k8-container-gate:IMAGE_VERSION"
+        - name: k8-container-gate
+          image: usabilitydynamics/k8-container-gate:latest
           imagePullPolicy: Always
           ports:
             - name: ssh
               containerPort: 22
+            - name: api
+              containerPort: 8080
           resources: 
             limits:
-              cpu: '2'
-              memory: 2Gi
+              cpu: '1'
+              memory: 512Mi
             requests:
               cpu: 200m
-              memory: 212Mi
+              memory: 256Mi
           env:
-            - name: KUBERNETES_CLUSTER_ENDPOINT
-              value: https://CLUSTER_ENDPOINT_VALUE
+            - name: NODE_ENV
+              value: production
+            - name: PORT
+              value: "8080"
             - name: NODE_PORT
               value: "8080"
-            - name: KUBERNETES_CLUSTER_NAMESPACE
-              value: CLUSTER_NAMESPACE_VALUE
-            - name: KUBERNETES_CLUSTER_USER_TOKEN
-              value: CLUSTER_USER_TOKEN_VALUE
-            - name: SLACK_NOTIFICACTION_URL
-              value: SLACK_NOTIFICACTION_URL_VALUE
-            - name: SLACK_NOTIFICACTION_CHANNEL
-              value: SLACK_NOTIFICACTION_CHANNEL_VALUE
+            - name: SERVICE_ENABLE_SSHD
+              value: "true"
+            - name: SERVICE_ENABLE_API
+              value: "true"
+            - name: SERVICE_ENABLE_FIREBASE
+              value: "false"
+            - name: USE_GKE_GCLOUD_AUTH_PLUGIN
+              value: "true"
+            - name: DEBUG
+              value: k8gate:*,api:*,auth:*,ssh:*
             - name: KUBERNETES_CLUSTER_NAME
-              value: CLUSTER_NAME_VALUE
+              value: ${KUBERNETES_CLUSTER_NAME}
+            - name: KUBERNETES_CLUSTER_NAMESPACE
+              value: ${KUBERNETES_CLUSTER_NAMESPACE}
+            - name: KUBERNETES_CLUSTER_ENDPOINT
+              value: https://${KUBERNETES_CLUSTER_ENDPOINT}
             - name: KUBERNETES_CLUSTER_SERVICEACCOUNT
-              value: CLUSTER_SERVICEACCOUNT_VALUE
-            - name: KUBERNETES_CLUSTER_CERTIFICATE
-              value: CLUSTER_CERTIFICATE_VALUE
-            - name: KUBERNETES_CLUSTER_USER_SECRET
-              value: CLUSTER_USER_SECRET_VALUE
+              value: ${KUBERNETES_CLUSTER_SERVICEACCOUNT}
             - name: KUBERNETES_CLUSTER_CONTEXT
-              value: CLUSTER_CONTEXT_VALUE
-            - name: ACCESS_TOKEN
-              value: ACCESS_TOKEN_VALUE
-            # State Management Configuration
-            - name: STATE_PROVIDER
-              value: "kubernetes"
-            - name: FIREBASE_PROJECT_ID
-              value: FIREBASE_PROJECT_ID_VALUE
-            - name: FIREBASE_PRIVATE_KEY
-              value: FIREBASE_PRIVATE_KEY_VALUE
-            - name: FIREBASE_CLIENT_EMAIL
-              value: FIREBASE_CLIENT_EMAIL_VALUE
-            - name: FIREBASE_DATABASE_URL
-              value: FIREBASE_DATABASE_URL_VALUE
+              value: ${KUBERNETES_CLUSTER_CONTEXT}
+            - name: ALLOW_SSH_ACCESS_ROLES
+              value: ${ALLOW_SSH_ACCESS_ROLES}
+          volumeMounts:
+            - name: ssh-keys
+              mountPath: /etc/ssh/authorized_keys.d
+            - name: worker-config
+              mountPath: /home/udx/.cd/configs
+            - name: services-config
+              mountPath: /etc/worker
+            - name: logs
+              mountPath: /var/log
           livenessProbe:
-            tcpSocket:
-              port: ssh
+            httpGet:
+              path: /health
+              port: api
             initialDelaySeconds: 10
             periodSeconds: 10
             timeoutSeconds: 3
             failureThreshold: 2
-            successThreshold: 1
           readinessProbe:
-            tcpSocket:
-              port: ssh
+            httpGet:
+              path: /health
+              port: api
             initialDelaySeconds: 10
             periodSeconds: 10
             timeoutSeconds: 3
             failureThreshold: 2
-            successThreshold: 1
+      volumes:
+        - name: ssh-keys
+          emptyDir: {}
+        - name: worker-config
+          configMap:
+            name: k8-container-gate-worker-config
+        - name: services-config
+          configMap:
+            name: k8-container-gate-services-config
+        - name: logs
+          emptyDir: {}

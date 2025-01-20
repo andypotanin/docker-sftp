@@ -4,67 +4,56 @@
 kind: ServiceAccount
 apiVersion: v1
 metadata:
-  name: sftp-deployment-restart
-  namespace: CLUSTER_NAMESPACE_VALUE
+  name: k8-container-gate-restart
+  namespace: default
 ---
 # allow getting status and patching only the one deployment you want
 # to restart
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  name: sftp-deployment-restart
-  namespace: CLUSTER_NAMESPACE_VALUE
+  name: k8-container-gate-restart
+  namespace: default
 rules:
   - apiGroups: ["apps", "extensions"]
     resources: ["deployments"]
-    resourceNames: ["GITHUB_ORG-sftp-GITHUB_BRANCH"]
-    verbs: ["get", "patch", "list", "watch"] # "list" and "watch" are only needed
-                                             # if you want to use `rollout status`
+    resourceNames: ["k8-container-gate"]
+    verbs: ["get", "patch", "list", "watch"]
 ---
 # bind the role to the service account
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: sftp-deployment-restart
-  namespace: CLUSTER_NAMESPACE_VALUE
+  name: k8-container-gate-restart
+  namespace: default
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
-  name: sftp-deployment-restart
+  name: k8-container-gate-restart
 subjects:
   - kind: ServiceAccount
-    name: sftp-deployment-restart
-    namespace: CLUSTER_NAMESPACE_VALUE
+    name: k8-container-gate-restart
+    namespace: default
 ---
 apiVersion: batch/v1
 kind: CronJob
 metadata:
-  name: sftp-deployment-restart
-  namespace: CLUSTER_NAMESPACE_VALUE
+  name: k8-container-gate-restart
+  namespace: default
 spec:
   concurrencyPolicy: Forbid
-  schedule: '0 3 */3 * *' # cron spec of time
+  schedule: '0 3 */3 * *'  # Every 3 days at 3 AM
   jobTemplate:
     spec:
-      backoffLimit: 2 # this has very low chance of failing, as all this does
-                      # is prompt kubernetes to schedule new replica set for
-                      # the deployment
-      activeDeadlineSeconds: 600 # timeout, makes most sense with
-                                 # "waiting for rollout" variant specified below
+      backoffLimit: 2
       template:
         spec:
-          serviceAccountName: sftp-deployment-restart # name of the service
-                                                      # account configured above
-          restartPolicy: Never
+          serviceAccountName: k8-container-gate-restart
           containers:
-            - name: kubectl
-              image: bitnami/kubectl # probably any kubectl image will do,
-                                     # optionaly specify version, but this
-                                     # should not be necessary, as long the
-                                     # version of kubectl is new enough to
-                                     # have `rollout restart`
-              command:
-                - 'kubectl'
-                - 'rollout'
-                - 'restart'
-                - 'deployment/GITHUB_ORG-sftp-GITHUB_BRANCH'
+          - name: kubectl
+            image: bitnami/kubectl:latest
+            command:
+            - /bin/sh
+            - -c
+            - kubectl rollout restart deployment/k8-container-gate
+          restartPolicy: OnFailure

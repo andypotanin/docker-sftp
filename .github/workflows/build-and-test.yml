@@ -65,7 +65,7 @@ jobs:
     - name: Build Docker image
       env:
         REGISTRY: usabilitydynamics
-        IMAGE_NAME: k8gate
+        IMAGE_NAME: k8-container-gate
       run: |
         docker build \
           --tag ${REGISTRY}/${IMAGE_NAME}:${{ steps.version.outputs.TAG }} \
@@ -76,7 +76,7 @@ jobs:
     - name: Test container startup and services
       env:
         REGISTRY: usabilitydynamics
-        IMAGE_NAME: k8gate
+        IMAGE_NAME: k8-container-gate
         ACCESS_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         KUBERNETES_CLUSTER_ENDPOINT: https://test-cluster:6443
         KUBERNETES_CLUSTER_NAME: test-cluster
@@ -155,7 +155,7 @@ jobs:
       if: github.event_name == 'push' && github.ref == 'refs/heads/master'
       env:
         REGISTRY: usabilitydynamics
-        IMAGE_NAME: k8gate
+        IMAGE_NAME: k8-container-gate
       run: |
         # Push both tagged and latest versions
         docker push ${REGISTRY}/${IMAGE_NAME}:${{ steps.version.outputs.TAG }}
