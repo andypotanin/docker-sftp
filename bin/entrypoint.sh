@@ -85,12 +85,19 @@ if [[ "${SERVICE_ENABLE_SSHD}" == "true" ]]; then
   /usr/sbin/sshd
 fi
 
+if [[ "${SERVICE_ENABLE_SSHD}" == "true" ]]; then
+  echo "Starting SSH daemon..."
+  /usr/sbin/sshd -D &
+fi
+
 if [[ "${SERVICE_ENABLE_API}" == "true" ]]; then
   echo "Starting API server with PM2..."
   cd /opt/sources/rabbitci/rabbit-ssh
   
-  # Switch to udx user and start PM2
-  su - udx -c "cd /opt/sources/rabbitci/rabbit-ssh && PM2_HOME=/home/udx/.pm2 pm2 start ecosystem.config.js --no-daemon"
+  # Ensure PM2 runs as udx user
+  chown -R udx:udx /home/udx/.pm2
+  chmod -R 755 /home/udx/.pm2
+  runuser -u udx -- bash -c "cd /opt/sources/rabbitci/rabbit-ssh && PM2_HOME=/home/udx/.pm2 pm2 start ecosystem.config.js --no-daemon"
 fi
 
 # Create log files if they don't exist

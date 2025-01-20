@@ -14,7 +14,7 @@ ChallengeResponseAuthentication no
 UsePAM yes
 
 # SFTP configuration
-Subsystem sftp internal-sftp
+Subsystem sftp /usr/lib/ssh/sftp-server
 ForceCommand /opt/sources/rabbitci/rabbit-ssh/bin/controller.ssh.entrypoint.sh
 
 # Security
