@@ -325,14 +325,7 @@ module.exports.updateKeys = async function updateKeys(options, taskCallback) {
                             namespace: process.env.KUBERNETES_CLUSTER_NAMESPACE,
                             token: process.env.KUBERNETES_CLUSTER_USER_TOKEN
                         },
-                        firebase: {
-                            credentials: {
-                                projectId: process.env.FIREBASE_PROJECT_ID,
-                                privateKey: process.env.FIREBASE_PRIVATE_KEY,
-                                clientEmail: process.env.FIREBASE_CLIENT_EMAIL
-                            },
-                            databaseURL: process.env.FIREBASE_DATABASE_URL
-                        },
+                        // Firebase provider removed - using Kubernetes or Local only
                         local: {
                             statePath: '/var/lib/k8gate/state.json',
                             keysPath: '/etc/ssh/authorized_keys.d'

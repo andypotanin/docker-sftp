@@ -15,7 +15,7 @@
 # - NODE_ENV: Production/development mode
 # - SERVICE_ENABLE_SSHD: Enable SSH daemon
 # - SERVICE_ENABLE_API: Enable API server
-# - SERVICE_ENABLE_FIREBASE: Enable Firebase integration
+# Firebase integration removed
 # - USE_GKE_GCLOUD_AUTH_PLUGIN: Enable GKE auth plugin
 # - PORT/NODE_PORT: Service ports
 
@@ -25,7 +25,7 @@ FROM usabilitydynamics/udx-worker-nodejs:latest
 ENV NODE_ENV=production \
     SERVICE_ENABLE_SSHD=true \
     SERVICE_ENABLE_API=true \
-    SERVICE_ENABLE_FIREBASE=false \
+    # Firebase integration removed \
     USE_GKE_GCLOUD_AUTH_PLUGIN=true \
     PORT=8080 \
     NODE_PORT=8080 \

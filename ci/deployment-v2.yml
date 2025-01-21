@@ -52,8 +52,7 @@ spec:
               value: "true"
             - name: SERVICE_ENABLE_API
               value: "true"
-            - name: SERVICE_ENABLE_FIREBASE
-              value: "false"
+            # Firebase integration removed
             - name: USE_GKE_GCLOUD_AUTH_PLUGIN
               value: "true"
             - name: DEBUG
