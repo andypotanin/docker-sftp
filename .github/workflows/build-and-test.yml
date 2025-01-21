@@ -70,12 +70,18 @@ jobs:
         sudo cp /tmp/test_key.pub /etc/ssh/authorized_keys.d/test-user
         sudo chmod 644 /etc/ssh/authorized_keys.d/test-user
 
+        # Install supervisord
+        sudo apt-get update
+        sudo apt-get install -y supervisor
+
         # Set up supervisord configuration
         echo "Setting up supervisord configuration..."
         sudo mkdir -p /etc/supervisor/conf.d /var/log/supervisor
+        sudo cp static/etc/supervisor/supervisord.conf /etc/supervisor/supervisord.conf
         sudo cp static/etc/supervisor/services.conf /etc/supervisor/conf.d/
         sudo chmod 755 /etc/supervisor/conf.d
         sudo chmod 644 /etc/supervisor/conf.d/services.conf
+        sudo chmod 644 /etc/supervisor/supervisord.conf
         sudo chown -R root:root /etc/supervisor
         
         # Create and set up log files
@@ -85,6 +91,8 @@ jobs:
         sudo chmod 644 /var/log/{sshd,k8gate,ssh-keys-sync,auth}.log
         
         echo "Supervisord configuration contents:"
+        cat /etc/supervisor/supervisord.conf
+        echo "Services configuration:"
         cat /etc/supervisor/conf.d/services.conf
         
         echo "Log directory structure:"
@@ -131,20 +139,32 @@ jobs:
           -p 8080:8080 \
           sftp-gateway:${{ steps.version.outputs.TAG }}
 
-        # Start the container and verify worker setup
-        echo "Starting container with worker configuration..."
+        # Start the container
+        echo "Starting container..."
         docker start test-container
         
-        # Verify supervisord configuration
-        echo "Verifying supervisord configuration in container..."
+        # Wait for container to initialize
+        sleep 5
+        
+        # Verify supervisord configuration and service status
+        echo "Verifying supervisord configuration and services..."
         docker exec test-container sh -c '
           echo "Supervisord version:"
           supervisord --version
+          
           echo "\nSupervisord configuration:"
           ls -la /etc/supervisor/conf.d/
           cat /etc/supervisor/conf.d/services.conf
+          
           echo "\nValidating configuration:"
           supervisord -c /etc/supervisor/supervisord.conf -n -t
+          
+          echo "\nStarting supervisord:"
+          supervisord -c /etc/supervisor/supervisord.conf
+          sleep 5
+          
+          echo "\nChecking service status:"
+          supervisorctl status
         '
         
         # Wait for container to start and show logs
