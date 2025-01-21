@@ -75,7 +75,7 @@ module.exports.updateKeys = function updateKeys(options, taskCallback) {
         keysPath: process.env.DIRECTORY_KEYS_BASE || '/etc/ssh/authorized_keys.d',
         passwordFile: process.env.PASSWORD_FILE || '/etc/passwd',
         passwordTemplate: process.env.PASSWORDS_TEMPLATE || 'alpine.passwords',
-        passwordPath: process.env.PASSWORDS_PATH || '/opt/sources/rabbitci/rabbit-ssh/static/templates/'
+        passwordPath: process.env.PASSWORDS_PATH || '/opt/sources/udx/k8gate/static/templates/'
     });
 
     if (!options.accessToken) {

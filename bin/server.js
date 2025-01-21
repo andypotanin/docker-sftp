@@ -87,6 +87,15 @@ app.use((err, req, res, next) => {
     });
 });
 
+// Root endpoint
+app.get('/', (req, res) => {
+    res.json({
+        message: 'Docker SFTP Gateway API Server',
+        version: process.env.npm_package_version || 'development',
+        timestamp: new Date().toISOString()
+    });
+});
+
 // Health check endpoint with comprehensive checks
 app.get(['/health', '/_health'], async (req, res) => {
     try {

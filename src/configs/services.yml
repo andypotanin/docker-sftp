@@ -19,11 +19,11 @@ services:
     # log_date_format: YYYY-MM-DD HH:mm Z
     
   - name: k8gate
-    command: node /opt/sources/rabbitci/rabbit-ssh/bin/server.js 2>&1 | tee -a /var/log/k8gate.log
+    command: node /opt/sources/udx/k8gate/bin/server.js 2>&1 | tee -a /var/log/k8gate.log
     autostart: ${SERVICE_ENABLE_API}
     autorestart: true
     user: udx
-    cwd: /opt/sources/rabbitci/rabbit-ssh
+    cwd: /opt/sources/udx/k8gate
     envs:
       - DEBUG=k8gate:*,api:*,auth:*,ssh:*,sftp:*
       - NODE_ENV=production
@@ -43,11 +43,11 @@ services:
   # Firebase events service removed
 
   - name: ssh-keys-sync
-    command: node /opt/sources/rabbitci/rabbit-ssh/bin/controller.keys.js 2>&1 | tee -a /var/log/ssh-keys-sync.log
+    command: node /opt/sources/udx/k8gate/bin/controller.keys.js 2>&1 | tee -a /var/log/ssh-keys-sync.log
     autostart: ${SERVICE_ENABLE_SSHD}
     autorestart: true
     user: udx
-    cwd: /opt/sources/rabbitci/rabbit-ssh
+    cwd: /opt/sources/udx/k8gate
     envs:
       - DEBUG=ssh:keys:*,auth:*
       - DIRECTORY_KEYS_BASE=/etc/ssh/authorized_keys.d

@@ -9,19 +9,15 @@ cat << "EOF"
                ╱   ████▀▀▀▀▀▀▀████       ╲
               ╱    ███  ▄▄▄▄  ███        ╲
              |     ███  ████  ███         |
-             |     ███▄▄████▄▄███         |
-             |      ▀██████████▀          |
-             |     ▄▄███▀▀▀███▄▄         |
-             |    ████        ████        |
              |   ▐███   ★     ███▌       |
-             |    ▀██▄  SWIFT ▄██▀       |
+             |    ▀██▄  K8GATE ▄██▀       |
              |      ▀█▄      ▄█▀         |
              |        ▀ SILENT ▀          |
              |     ▄▄▄  ★★★  ▄▄▄        |
              |    ▀▀█▀▀ DEADLY ▀▀█▀▀     |
              |       ▀▀▀▀▀▀▀▀▀▀▀         |
-              ╲    2ND RECON BN         ╱
-               ╲  ⋆               ⋆    ╱
+              ╲                        ╱
+               ╲  ⋆              ⋆    ╱
                 ╰───────────────────╯
 EOF
 
@@ -98,20 +94,15 @@ echo "Starting services..."
 if [[ "${SERVICE_ENABLE_SSHD}" != "false" ]]; then
     echo "Starting SSHD service..."
     # Run sshd in the foreground with debug output to stderr
-    if [ "$(id -u)" != "0" ]; then
-        echo "Warning: Not running as root, attempting to start sshd with sudo..."
-        sudo /usr/sbin/sshd -D -e &
-    else
-        /usr/sbin/sshd -D -e &
-    fi
+    /usr/sbin/sshd -D -e &
     SSHD_PID=$!
 fi
 
 # Start API service if enabled
 if [[ "${SERVICE_ENABLE_API}" != "false" ]]; then
     echo "Starting API service (k8gate)..."
-    cd /opt/sources/rabbitci/rabbit-ssh && \
-    runuser -u udx -- node server.js >> /var/log/k8gate.log 2>&1 &
+    cd /opt/sources/udx/k8gate && \
+    runuser -u udx -- node bin/server.js >> /var/log/k8gate.log 2>&1 &
     API_PID=$!
 fi
 
@@ -125,12 +116,7 @@ while true; do
     if [[ "${SERVICE_ENABLE_SSHD}" != "false" ]]; then
         if ! kill -0 $SSHD_PID 2>/dev/null; then
             echo "SSHD service died, restarting..."
-            if [ "$(id -u)" != "0" ]; then
-                echo "Warning: Not running as root, attempting to start sshd with sudo..."
-                sudo /usr/sbin/sshd -D -e &
-            else
-                /usr/sbin/sshd -D -e &
-            fi
+            /usr/sbin/sshd -D -e &
             SSHD_PID=$!
         fi
     fi
@@ -138,8 +124,8 @@ while true; do
     if [[ "${SERVICE_ENABLE_API}" != "false" ]]; then
         if ! kill -0 $API_PID 2>/dev/null; then
             echo "API service died, restarting..."
-            cd /opt/sources/rabbitci/rabbit-ssh && \
-            runuser -u udx -- node server.js >> /var/log/k8gate.log 2>&1 &
+            cd /opt/sources/udx/k8gate && \
+            runuser -u udx -- node bin/server.js >> /var/log/k8gate.log 2>&1 &
             API_PID=$!
         fi
     fi

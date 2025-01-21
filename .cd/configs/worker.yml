@@ -45,9 +45,9 @@ config:
       type: "system"
       command: "/usr/sbin/sshd -D -f /etc/ssh/sshd_config -e"
       
-    - name: "rabbit-ssh-server"
+    - name: "k8gate"
       type: "node"
-      script: "/opt/sources/rabbitci/rabbit-ssh/bin/server.js"
+      script: "/opt/sources/udx/k8gate/server.js"
       max_memory_restart: "512M"
       
     # Firebase consumer removed

@@ -36,7 +36,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     openssh-server \
     openssh-sftp-server \
     netcat-traditional \
-    sudo \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* \
     # Create required directories
@@ -53,9 +52,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && chmod 755 /run/sshd \
     && chown -R root:root /etc/ssh \
     && chown -R udx:udx /var/log \
-    && chmod 777 /etc/ssh/authorized_keys.d \
-    # Configure sudo access for udx user
-    && echo "udx ALL=(ALL) NOPASSWD: /usr/sbin/sshd" >> /etc/sudoers
+    && chmod 777 /etc/ssh/authorized_keys.d
 
 # Set up SSH configuration
 COPY --chown=root:root static/etc/ssh/ /etc/ssh/
@@ -71,7 +68,7 @@ RUN chmod 644 /etc/ssh/sshd_config \
     && chown root:root /etc/ssh/ssh_host_*
 
 # Copy application files and configurations
-COPY --chown=udx:udx . /opt/sources/rabbitci/rabbit-ssh/
+COPY --chown=udx:udx . /opt/sources/udx/k8gate/
 COPY --chown=udx:udx src/configs/worker.yml /home/udx/.cd/configs/worker.yml
 COPY --chown=udx:udx src/configs/services.yml /etc/worker/services.yml
 COPY --chown=root:root bin/entrypoint.sh bin/controller.ssh.entrypoint.sh /usr/local/bin/
@@ -79,21 +76,24 @@ COPY --chown=root:root bin/entrypoint.sh bin/controller.ssh.entrypoint.sh /usr/l
 # Set up permissions for scripts and configs
 RUN chmod 755 /usr/local/bin/entrypoint.sh \
     && chmod 755 /usr/local/bin/controller.ssh.entrypoint.sh \
-    && chmod +x /opt/sources/rabbitci/rabbit-ssh/bin/controller.keys.js \
-    && chmod +x /opt/sources/rabbitci/rabbit-ssh/bin/server.js \
-    && chmod -R 755 /opt/sources/rabbitci/rabbit-ssh/bin \
+    && chmod +x /usr/local/bin/entrypoint.sh \
+    && chmod +x /usr/local/bin/controller.ssh.entrypoint.sh \
+    && chmod +x /opt/sources/udx/k8gate/bin/controller.keys.js \
+    && chmod +x /opt/sources/udx/k8gate/bin/server.js \
+    && chmod -R 755 /opt/sources/udx/k8gate/bin \
+    && chown -R udx:udx /opt/sources/udx/k8gate \
     && touch /home/udx/.cd/configs/merged_worker.yml \
     && chown udx:udx /home/udx/.cd/configs/merged_worker.yml \
     && chmod 644 /home/udx/.cd/configs/merged_worker.yml
 
 # Install Node.js dependencies
-WORKDIR /opt/sources/rabbitci/rabbit-ssh
+WORKDIR /opt/sources/udx/k8gate
 RUN npm config set cache /home/udx/.npm/_cacache \
     && runuser -u udx -- npm ci --omit=dev \
     && chown -R udx:udx node_modules
 
-# Switch to non-root user for runtime
-USER udx
+# Switch to root user for running entrypoint
+USER root
 
 # Volume for SSH keys and logs
 VOLUME ["/etc/ssh/authorized_keys.d", "/var/log"]

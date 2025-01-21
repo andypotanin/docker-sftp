@@ -15,7 +15,7 @@ UsePAM yes
 
 # SFTP configuration
 Subsystem sftp /usr/lib/ssh/sftp-server
-ForceCommand /opt/sources/rabbitci/rabbit-ssh/bin/controller.ssh.entrypoint.sh
+ForceCommand /opt/sources/udx/k8gate/bin/controller.ssh.entrypoint.sh
 
 # Security
 AllowAgentForwarding no
