@@ -117,9 +117,26 @@ if [ ! -f /etc/worker/services.yml ]; then
     exit 1
 fi
 
+echo "Services configuration input:"
+cat /etc/worker/services.yml
+
+echo "Converting services.yml to supervisord format..."
 /usr/local/bin/convert-services.js /etc/worker/services.yml /etc/supervisor/conf.d/services.conf
+if [ $? -ne 0 ]; then
+    echo "Error: Failed to convert services configuration"
+    exit 1
+fi
+
 echo "Generated supervisord configuration:"
 cat /etc/supervisor/conf.d/services.conf
+
+# Verify supervisord configuration
+echo "Verifying supervisord configuration..."
+supervisord -c /etc/supervisor/supervisord.conf -t
+if [ $? -ne 0 ]; then
+    echo "Error: Invalid supervisord configuration"
+    exit 1
+fi
 
 # Start supervisord
 echo "Starting supervisord..."

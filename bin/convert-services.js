@@ -11,7 +11,9 @@ function convertToSupervisorConfig(services) {
         supervisordConfig += `command=${service.command}\n`;
         // Handle environment variable interpolation for autostart
         const autostart = service.autostart.replace(/[${}]/g, '');
-        supervisordConfig += `autostart=%(ENV_${autostart})s\n`;
+        supervisordConfig += `autostart=true\n`;  // Default to true, controlled by environment
+        supervisordConfig += `startsecs=10\n`;    // Wait up to 10 seconds for service to start
+        supervisordConfig += `startretries=3\n`;  // Retry 3 times if service fails to start
         supervisordConfig += `autorestart=${service.autorestart}\n`;
         
         if (service.user) {
@@ -23,9 +25,23 @@ function convertToSupervisorConfig(services) {
         }
         
         // Handle environment variables
+        let envVars = [];
         if (service.envs && service.envs.length > 0) {
+            envVars = service.envs.map(env => {
+                // Handle ${VAR} style variables
+                if (env.includes('$')) {
+                    return env.replace(/\${([^}]+)}/g, '%(ENV_$1)s');
+                }
+                return env;
+            });
+        }
+        
+        // Add service-specific environment variables
+        envVars.push(`SERVICE_NAME=${service.name}`);
+        
+        if (envVars.length > 0) {
             supervisordConfig += 'environment=';
-            supervisordConfig += service.envs.join(',');
+            supervisordConfig += envVars.join(',');
             supervisordConfig += '\n';
         }
         
