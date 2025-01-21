@@ -33,12 +33,16 @@ jobs:
       id: auth
       uses: 'google-github-actions/auth@v2'
       with:
-        workload_identity_provider: '${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}'
-        service_account: '${{ secrets.GCP_SERVICE_ACCOUNT }}'
-        token_format: 'access_token'
-        access_token_lifetime: '3600s'
+        workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+        service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+        token_format: access_token
+        access_token_lifetime: 3600s
         create_credentials_file: true
         export_environment_variables: true
+        cleanup_credentials: true
+        access_token_scopes: |
+          https://www.googleapis.com/auth/cloud-platform
+          https://www.googleapis.com/auth/cloudrun
         
     - name: Set up Cloud SDK
       uses: 'google-github-actions/setup-gcloud@v2'
