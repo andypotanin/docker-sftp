@@ -1,0 +1,23 @@
+name: Update Docker Hub Description
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - 'docker-description.md'
+      - '.github/workflows/docker-hub-description.yml'
+
+jobs:
+  docker-hub-description:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Docker Hub Description
+        uses: peter-evans/dockerhub-description@v3
+        with:
+          username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
+          repository: usabilitydynamics/k8-container-gate
+          short-description: "K8-native SSH/SFTP gateway with GitHub auth and flexible state management"
+          readme-filepath: ./docker-description.md
