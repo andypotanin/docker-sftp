@@ -1,10 +1,19 @@
 ---
-kind: workerService
-version: udx.io/worker-v1/service
+kind: Service
+version: v1
 services:
   - name: sshd
     command: /usr/sbin/sshd -D -f /etc/ssh/sshd_config -e
     autostart: ${SERVICE_ENABLE_SSHD}
+    
+  - name: k8gate
+    command: /opt/sources/rabbitci/rabbit-ssh/bin/server.js
+    autostart: ${SERVICE_ENABLE_API}
+    
+  - name: ssh-keys-sync
+    command: /opt/sources/rabbitci/rabbit-ssh/bin/controller.keys.js
+    autostart: ${SERVICE_ENABLE_SSHD}
+    interval: 300
     autorestart: true
     user: root
     envs:
