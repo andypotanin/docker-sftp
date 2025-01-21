@@ -126,10 +126,39 @@ echo "Services configuration input:"
 cat /etc/worker/services.yml
 
 echo "Converting services.yml to supervisord format..."
+echo "Verifying services.yml exists and is readable..."
+if [ ! -f /etc/worker/services.yml ]; then
+    echo "Error: /etc/worker/services.yml not found"
+    ls -la /etc/worker/
+    exit 1
+fi
+
+echo "Content of /etc/worker/services.yml:"
+cat /etc/worker/services.yml
+
+echo "Running convert-services script..."
 /usr/local/bin/convert-services /etc/worker/services.yml /etc/supervisor/conf.d/services.conf
-if [ $? -ne 0 ]; then
+CONVERT_EXIT=$?
+
+echo "Convert script exit code: $CONVERT_EXIT"
+if [ $CONVERT_EXIT -ne 0 ]; then
     echo "Error: Failed to convert services configuration"
-    cat /usr/local/bin/convert-services.js
+    echo "convert-services script content:"
+    cat /usr/local/bin/convert-services
+    echo "Node.js version:"
+    node --version
+    echo "Installed packages:"
+    npm list -g
+    exit 1
+fi
+
+echo "Generated supervisord configuration:"
+cat /etc/supervisor/conf.d/services.conf
+
+echo "Verifying supervisord configuration..."
+supervisord -c /etc/supervisor/supervisord.conf -t
+if [ $? -ne 0 ]; then
+    echo "Error: Invalid supervisord configuration"
     exit 1
 fi
 
