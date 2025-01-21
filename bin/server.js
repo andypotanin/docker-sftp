@@ -33,10 +33,14 @@ process.on('unhandledRejection', (reason, promise) => {
 // Graceful shutdown handler
 process.on('SIGTERM', () => {
     debug('SIGTERM received, shutting down gracefully');
-    server.close(() => {
-        debug('HTTP server closed');
+    if (server && server.close) {
+        server.close(() => {
+            debug('HTTP server closed');
+            process.exit(0);
+        });
+    } else {
         process.exit(0);
-    });
+    }
 });
 
 // Start the gateway with environment-based configuration

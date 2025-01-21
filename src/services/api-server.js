@@ -4,7 +4,6 @@ const _ = require('lodash');
 const debug = require('debug')('k8gate:server');
 const md5 = require('md5');
 const events = require('../utils/events');
-const https = require('https');
 
 /**
  * API Server Service
