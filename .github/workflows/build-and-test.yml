@@ -139,10 +139,9 @@ jobs:
           -p 8080:8080 \
           sftp-gateway:${{ steps.version.outputs.TAG }}
 
-        # Start the container with required environment variables
-        echo "Starting container with environment variables..."
+        # Start the container
+        echo "Starting container..."
         docker start test-container
-        docker exec test-container sh -c 'export SERVICE_ENABLE_SSHD=true && export SERVICE_ENABLE_API=true && export NODE_ENV=test'
         
         # Wait for container to initialize
         sleep 5

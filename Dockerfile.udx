@@ -169,7 +169,9 @@ ENV HOME=/home/udx \
     USER=udx \
     DEBUG=ssh*,sftp*,k8gate* \
     NODE_ENV=production \
-    NODE_PORT=8080
+    NODE_PORT=8080 \
+    SERVICE_ENABLE_SSHD=true \
+    SERVICE_ENABLE_API=true
 
 # Volume for SSH keys and logs
 VOLUME ["/etc/ssh/authorized_keys.d", "/var/log"]
