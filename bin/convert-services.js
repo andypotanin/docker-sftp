@@ -9,7 +9,9 @@ function convertToSupervisorConfig(services) {
     for (const service of services) {
         supervisordConfig += `[program:${service.name}]\n`;
         supervisordConfig += `command=${service.command}\n`;
-        supervisordConfig += `autostart=%(ENV_${service.autostart.replace(/[${}]/g, '')}s)\n`;
+        // Handle environment variable interpolation for autostart
+        const autostart = service.autostart.replace(/[${}]/g, '');
+        supervisordConfig += `autostart=%(ENV_${autostart})s\n`;
         supervisordConfig += `autorestart=${service.autorestart}\n`;
         
         if (service.user) {
