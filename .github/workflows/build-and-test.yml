@@ -71,13 +71,13 @@ jobs:
         sudo chmod 644 /etc/ssh/authorized_keys.d/test-user
         
         # Prepare worker configuration directory
-        mkdir -p /tmp/worker/configs
-        cp .github/workflows/services.yml /tmp/worker/services.yml
-        cp .github/workflows/services.yml /tmp/worker/configs/services.yml
-        chmod -R 755 /tmp/worker
-        chown -R root:root /tmp/worker
+        sudo mkdir -p /etc/worker/configs
+        sudo cp .github/workflows/services.yml /etc/worker/services.yml
+        sudo cp .github/workflows/services.yml /etc/worker/configs/services.yml
+        sudo chmod -R 755 /etc/worker
+        sudo chown -R root:root /etc/worker
         echo "Worker configuration contents:"
-        cat /tmp/worker/services.yml
+        cat /etc/worker/services.yml
         
         # Test worker binary and configuration
         echo "Testing worker binary..."
@@ -85,7 +85,7 @@ jobs:
         
         echo "Testing worker configuration validation..."
         docker run --rm \
-          -v /tmp/worker:/etc/worker:ro \
+          -v /etc/worker:/etc/worker:ro \
           -e WORKER_DEBUG=true \
           -e DEBUG=worker:*,ssh:*,k8gate:* \
           -e NODE_ENV=test \
@@ -97,7 +97,7 @@ jobs:
         # Verify worker configuration directory structure
         echo "Verifying worker configuration structure..."
         docker run --rm \
-          -v /tmp/worker:/etc/worker:ro \
+          -v /etc/worker:/etc/worker:ro \
           sftp-gateway:${{ steps.version.outputs.TAG }} \
           ls -la /etc/worker/
         
