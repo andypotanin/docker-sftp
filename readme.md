@@ -157,89 +157,45 @@ state:
 
 For detailed configuration options, see [State Management Documentation](docs/state-management.md).
 
-## Deployment
+## Supply Chain Security
 
-### Azure Kubernetes Service (AKS)
+Our Docker image supply chain is carefully designed with security and reliability in mind:
 
-1. Create AKS cluster:
-```bash
-az aks create \
-  --resource-group your-rg \
-  --name your-cluster \
-  --node-count 1 \
-  --enable-addons monitoring
-```
+### Base Images
 
-2. Configure authentication:
-```bash
-az aks get-credentials --resource-group your-rg --name your-cluster
-```
+1. **Root Image**: [usabilitydynamics/worker](https://github.com/udx/worker)
+   - Base Alpine Linux image. Core worker functionality. Security hardening.
+   - Worker configuration at [lib/worker_config.sh](https://github.com/udx/worker/blob/latest/lib/worker_config.sh)
+   - Dockerfile at [udx/worker](https://github.com/udx/worker/blob/latest/Dockerfile)
+   - Available on [Docker Hub](https://registry.hub.docker.com/r/usabilitydynamics/udx-worker)
 
-3. Deploy K8 Container Gate:
-```bash
-kubectl apply -f ci/deployment-aks.yml
-```
+2. **Node.js Layer**: [udx/worker-nodejs](https://github.com/udx/worker-nodejs)
+   - Node.js runtime environment. Security hardening.
+   - Dockerfile at [udx/worker-nodejs](https://github.com/udx/worker-nodejs/blob/latest/Dockerfile)
+   - Available on [Docker Hub](https://registry.hub.docker.com/r/usabilitydynamics/udx-worker-nodejs)
 
-### Other Kubernetes Platforms
+3. **SFTP Gateway**: This Repository (aka "Container Gate")
+   - Connection You To Kubernetes with Zero Trust. Security hardening.
+   - Dockerfile at [udx/container-gates](https://github.com/udx/container-gates/blob/latest/Dockerfile)
+   - Available on [Docker Hub](https://registry.hub.docker.com/r/usabilitydynamics/udx-sftp)
 
-The deployment process is similar for other Kubernetes platforms. Adjust the following:
+### Configuration Management
 
-1. Use platform-specific cluster creation
-2. Configure appropriate RBAC
-3. Apply the deployment configuration
+Our configuration follows the UDX Worker standard:
 
-## Development
+1. **Service Configuration**: [services.yml](src/configs/services.yml)
+   - Defines service components
+   - Health checks
+   - Process management
+   - Documentation: [Worker Services](https://github.com/udx/worker/blob/latest/src/configs/_worker_services.md)
 
-### Local Development
+2. **Worker Configuration**: [worker.yml](src/configs/worker.yml)
+   - Environment variables
+   - Secrets management
+   - Security policies
+   - Documentation: [Worker Config](https://github.com/udx/worker/blob/latest/src/configs/_worker_config.md)
 
-1. Install dependencies:
-```bash
-npm install
-```
-
-2. Start development server:
-```bash
-npm run dev-start
-```
-
-### Running Tests
-
-```bash
-npm test
-```
-
-### Linting
-
-```bash
-npm run lint
-npm run lint:fix  # Auto-fix issues
-```
-
-## Troubleshooting
-
-### Common Issues
-
-1. SSH Connection Failed
-- Verify GitHub SSH key is properly added
-- Check ALLOW_SSH_ACCESS_ROLES configuration
-- Verify pod status with `kubectl get pods`
-
-2. State Management Issues
-- Check provider configuration in worker.yml
-- Verify Kubernetes secrets permissions
-- Check Firebase credentials if using Firebase provider
-
-### Logs
-
-View container logs:
-```bash
-kubectl logs -f deployment/k8-container-gate
-```
-
-View SSH daemon logs:
-```bash
-kubectl exec -it deployment/k8-container-gate -- tail -f /var/log/sshd.log
-```
+For more details about the UDX Worker platform, visit [Docker Hub](https://registry.hub.docker.com/r/usabilitydynamics/udx-worker).
 
 ## Contributing
 

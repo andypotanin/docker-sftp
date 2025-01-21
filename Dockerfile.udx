@@ -1,150 +1,106 @@
 # Docker SFTP Gateway
 # This Dockerfile builds a container that provides SFTP access to Kubernetes pods
 #
-# Key Components:
-# - Base Image: usabilitydynamics/udx-worker-nodejs for Node.js support
-# - OpenSSH server for SFTP/SSH access
-# - Kubernetes tools (kubectl) for pod access
-# - Google Cloud SDK for GKE support
-#
-# The container uses two entrypoint scripts:
-# 1. entrypoint.sh: Initializes services and SSH keys (ENTRYPOINT)
-# 2. controller.ssh.entrypoint.sh: Handles SSH connections (CMD)
-#
-# Environment Variables:
-# - NODE_ENV: Production/development mode
-# - SERVICE_ENABLE_SSHD: Enable SSH daemon
-# - SERVICE_ENABLE_API: Enable API server
-# - SERVICE_ENABLE_FIREBASE: Enable Firebase integration
-# - USE_GKE_GCLOUD_AUTH_PLUGIN: Enable GKE auth plugin
-# - PORT/NODE_PORT: Service ports
+# Base Image: usabilitydynamics/udx-worker-nodejs
+# The base image already provides:
+# - Node.js environment
+# - Google Cloud SDK
+# - AWS CLI
+# - Azure CLI
+# - Common utilities
+# - Non-root user (udx:udx, UID:500, GID:500)
 
 FROM usabilitydynamics/udx-worker-nodejs:latest
 
+LABEL maintainer="UDX Team <team@usabilitydynamics.com>" \
+      org.opencontainers.image.source="https://github.com/usabilitydynamics/docker-sftp" \
+      org.opencontainers.image.description="SFTP Gateway with Kubernetes Integration" \
+      org.opencontainers.image.licenses="MIT"
+
+# Build arguments
+ARG KUBECTL_VERSION=v1.29.0
+
 # Set environment variables
-ENV NODE_ENV=production \
-    SERVICE_ENABLE_SSHD=true \
+ENV SERVICE_ENABLE_SSHD=true \
     SERVICE_ENABLE_API=true \
     SERVICE_ENABLE_FIREBASE=false \
-    USE_GKE_GCLOUD_AUTH_PLUGIN=true \
     PORT=8080 \
     NODE_PORT=8080 \
     DEBUG=ssh*,sftp*,k8gate*
 
-# Switch to root for package installations
+# Switch to root for system setup
 USER root
 
-# Install system dependencies
+# Install OpenSSH server and other required packages
 RUN apt-get update && apt-get install -y --no-install-recommends \
     openssh-server \
     openssh-sftp-server \
     netcat-traditional \
-    ca-certificates \
+    sudo \
     && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
-
-# Set up directories and permissions
-WORKDIR /opt/sources/rabbitci/rabbit-ssh
-
-# Create required directories with correct ownership
-RUN mkdir -p \
-    /home/udx/.kube \
-    /root/.ssh \
-    /etc/ssh \
-    /home/udx/.cd/configs \
-    /etc/worker \
-    /var/log \
-    /usr/local/lib/node_modules \
-    /home/udx/.npm \
-    /usr/local/bin \
-    /home/udx/.worker && \
-    ln -s /usr/bin/node /usr/local/bin/node && \
-    chown -R udx:udx /home/udx && \
-    chmod -R 777 /home/udx/.cd/configs && \
-    chmod -R 777 /home/udx/.worker && \
-    chmod -R 777 /etc/worker && \
-    chown -R udx:udx /etc/worker
+    && rm -rf /var/lib/apt/lists/* \
+    # Create required directories
+    && mkdir -p \
+        /home/udx/.kube \
+        /etc/ssh \
+        /etc/ssh/authorized_keys.d \
+        /run/sshd \
+        /var/log \
+    # Set correct permissions
+    && chown -R udx:udx /home/udx \
+    && chmod 755 /etc/ssh \
+    && chmod 755 /etc/ssh/authorized_keys.d \
+    && chmod 755 /run/sshd \
+    && chown -R root:root /etc/ssh \
+    && chown -R udx:udx /var/log \
+    && chmod 777 /etc/ssh/authorized_keys.d \
+    # Configure sudo access for udx user
+    && echo "udx ALL=(ALL) NOPASSWD: /usr/sbin/sshd" >> /etc/sudoers
 
 # Set up SSH configuration
 COPY --chown=root:root static/etc/ssh/ /etc/ssh/
-RUN chmod 755 /etc/ssh && \
-    chmod 644 /etc/ssh/sshd_config && \
-    mkdir -p /etc/ssh/authorized_keys.d /run/sshd && \
-    chmod 755 /etc/ssh/authorized_keys.d && \
-    chmod 755 /run/sshd && \
-    chown -R root:root /etc/ssh && \
-    chown -R udx:udx /home/udx && \
-    chown -R udx:udx /opt/sources/rabbitci && \
-    chown -R udx:udx /var/log && \
-    chmod 777 /etc/ssh/authorized_keys.d
-COPY --chown=udx:udx src/configs/worker.yml /home/udx/.cd/configs/worker.yml
+RUN chmod 644 /etc/ssh/sshd_config \
+    && touch /var/log/sshd.log /var/log/auth.log /var/log/k8gate.log \
+    && chmod 644 /var/log/sshd.log /var/log/auth.log /var/log/k8gate.log \
+    && chown -R udx:udx /var/log \
+    # Generate SSH host keys with correct permissions
+    && rm -f /etc/ssh/ssh_host_* \
+    && ssh-keygen -A \
+    && chmod 600 /etc/ssh/ssh_host_*_key \
+    && chmod 644 /etc/ssh/ssh_host_*_key.pub \
+    && chown root:root /etc/ssh/ssh_host_*
 
-# Fix SSH config and logging permissions
-RUN chmod 644 /etc/ssh/sshd_config && \
-    touch /var/log/sshd.log /var/log/auth.log /var/log/k8gate.log && \
-    chmod 644 /var/log/*.log && \
-    chown udx:udx /var/log/*.log && \
-    chmod 755 /etc/ssh /etc/ssh/authorized_keys.d
-
-# Install kubectl
-RUN curl -L https://dl.k8s.io/release/v1.29.0/bin/linux/amd64/kubectl -o /usr/local/bin/kubectl \
-    && chmod +x /usr/local/bin/kubectl
-
-# Install Google Cloud SDK in /usr/local
-RUN curl -sSL https://sdk.cloud.google.com | bash -s -- --install-dir=/usr/local --disable-prompts \
-    && /usr/local/google-cloud-sdk/bin/gcloud components install gke-gcloud-auth-plugin \
-    && chown -R udx:udx /usr/local/google-cloud-sdk
-ENV PATH $PATH:/usr/local/google-cloud-sdk/bin
-
-# Copy application files
+# Copy application files and configurations
 COPY --chown=udx:udx . /opt/sources/rabbitci/rabbit-ssh/
-
-# Copy service configuration and set permissions
+COPY --chown=udx:udx src/configs/worker.yml /home/udx/.cd/configs/worker.yml
 COPY --chown=udx:udx src/configs/services.yml /etc/worker/services.yml
+COPY --chown=root:root bin/entrypoint.sh bin/controller.ssh.entrypoint.sh /usr/local/bin/
 
-# Set up worker configuration directories
-RUN mkdir -p /home/udx/.cd/configs /etc/worker && \
-    chown -R udx:udx /home/udx/.cd && \
-    chmod -R 777 /home/udx/.cd/configs && \
-    chmod -R 755 /etc/worker && \
-    touch /home/udx/.cd/configs/merged_worker.yml && \
-    chown udx:udx /home/udx/.cd/configs/merged_worker.yml && \
-    chmod 644 /home/udx/.cd/configs/merged_worker.yml
+# Set up permissions for scripts and configs
+RUN chmod 755 /usr/local/bin/entrypoint.sh \
+    && chmod 755 /usr/local/bin/controller.ssh.entrypoint.sh \
+    && chmod +x /opt/sources/rabbitci/rabbit-ssh/bin/controller.keys.js \
+    && chmod +x /opt/sources/rabbitci/rabbit-ssh/bin/server.js \
+    && chmod -R 755 /opt/sources/rabbitci/rabbit-ssh/bin \
+    && touch /home/udx/.cd/configs/merged_worker.yml \
+    && chown udx:udx /home/udx/.cd/configs/merged_worker.yml \
+    && chmod 644 /home/udx/.cd/configs/merged_worker.yml
 
-# Set up entrypoint scripts and permissions
-COPY --chown=root:root bin/entrypoint.sh /usr/local/bin/
-COPY --chown=root:root bin/controller.ssh.entrypoint.sh /usr/local/bin/
-RUN chmod 755 /usr/local/bin/entrypoint.sh && \
-    chmod 755 /usr/local/bin/controller.ssh.entrypoint.sh && \
-    chmod +x /opt/sources/rabbitci/rabbit-ssh/bin/controller.keys.js && \
-    chmod +x /opt/sources/rabbitci/rabbit-ssh/bin/server.js && \
-    chmod -R 755 /opt/sources/rabbitci/rabbit-ssh/bin && \
-    mkdir -p /usr/local/lib/node_modules && \
-    chown -R udx:udx /home/udx/.npm && \
-    chmod -R 775 /home/udx/.npm
+# Install Node.js dependencies
+WORKDIR /opt/sources/rabbitci/rabbit-ssh
+RUN npm config set cache /home/udx/.npm/_cacache \
+    && runuser -u udx -- npm ci --omit=dev \
+    && chown -R udx:udx node_modules
 
-# Add Google Cloud SDK to PATH
-ENV PATH $PATH:/usr/local/google-cloud-sdk/bin
-
-# Install dependencies with correct permissions
-USER root
-RUN mkdir -p /home/udx/.npm && \
-    chown -R udx:udx /home/udx/.npm && \
-    chmod -R 755 /home/udx && \
-    npm config set cache /home/udx/.npm/_cacache && \
-    cd /opt/sources/rabbitci/rabbit-ssh && \
-    runuser -u udx -- npm install --omit=dev && \
-    chown -R udx:udx /opt/sources/rabbitci/rabbit-ssh/node_modules
-
-# Set environment variables for API server
-ENV HOME=/home/udx \
-    USER=udx \
-    DEBUG=ssh*,sftp*,k8gate* \
-    NODE_ENV=production \
-    NODE_PORT=8080
+# Switch to non-root user for runtime
+USER udx
 
 # Volume for SSH keys and logs
 VOLUME ["/etc/ssh/authorized_keys.d", "/var/log"]
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD nc -z localhost 22 || exit 1
 
 # Expose ports
 EXPOSE 22 8080

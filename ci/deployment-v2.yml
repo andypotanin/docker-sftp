@@ -54,8 +54,6 @@ spec:
               value: "true"
             - name: SERVICE_ENABLE_FIREBASE
               value: "false"
-            - name: USE_GKE_GCLOUD_AUTH_PLUGIN
-              value: "true"
             - name: DEBUG
               value: k8gate:*,api:*,auth:*,ssh:*,sftp:*
             - name: KUBERNETES_CLUSTER_NAME

@@ -18,6 +18,7 @@
 const fs = require('fs');
 const { execSync } = require('child_process');
 const debug = require('debug')('k8gate:setup');
+const _ = require('lodash');
 
 function setupSSHKeys() {
     debug('Setting up SSH keys...');
@@ -38,7 +39,7 @@ function setupSSHKeys() {
 }
 
 function setupKubernetes() {
-    if (process.env.SERVICE_ENABLE_K8S !== 'true') {
+    if ( _.get(process, 'env.SERVICE_ENABLE_K8S') !== 'true') {
         debug('Kubernetes setup disabled');
         return;
     }
@@ -50,23 +51,23 @@ function setupKubernetes() {
         kind: 'Config',
         clusters: [{
             cluster: {
-                'certificate-authority-data': process.env.KUBERNETES_CLUSTER_CERTIFICATE,
-                server: process.env.KUBERNETES_CLUSTER_ENDPOINT
+                'certificate-authority-data': _.get(process, 'env.KUBERNETES_CLUSTER_CERTIFICATE'),
+                server: _.get(process, 'env.KUBERNETES_CLUSTER_ENDPOINT')
             },
-            name: process.env.KUBERNETES_CLUSTER_NAME
+            name: _.get(process, 'env.KUBERNETES_CLUSTER_NAME')
         }],
         contexts: [{
             context: {
-                cluster: process.env.KUBERNETES_CLUSTER_NAME,
-                user: process.env.KUBERNETES_CLUSTER_USER_TOKEN
+                cluster: _.get(process, 'env.KUBERNETES_CLUSTER_NAME'),
+                user: _.get(process, 'env.KUBERNETES_CLUSTER_USER_TOKEN')
             },
-            name: process.env.KUBERNETES_CLUSTER_CONTEXT
+            name: _.get(process, 'env.KUBERNETES_CLUSTER_CONTEXT')
         }],
-        'current-context': process.env.KUBERNETES_CLUSTER_CONTEXT,
+        'current-context': _.get(process, 'env.KUBERNETES_CLUSTER_CONTEXT'),
         users: [{
-            name: process.env.KUBERNETES_CLUSTER_USER_TOKEN,
+            name: _.get(process, 'env.KUBERNETES_CLUSTER_USER_TOKEN'),
             user: {
-                token: process.env.KUBERNETES_CLUSTER_USER_SECRET
+                token: _.get(process, 'env.KUBERNETES_CLUSTER_USER_SECRET')
             }
         }]
     };

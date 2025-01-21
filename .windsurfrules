@@ -4,3 +4,4 @@ Never push to origin, all work must be done in our fork.
 Always analyze files fully.
 Do not edit files until having analyzed them fully start to end.
 WE ONLY BUILD DOCKER ON GITHUB ACTIONS
+Don't delete my fucking code.

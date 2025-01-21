@@ -8,7 +8,7 @@ HostKey /etc/ssh/ssh_host_ed25519_key
 # Authentication
 PermitRootLogin no
 PubkeyAuthentication yes
-AuthorizedKeysFile /etc/ssh/authorized_keys.d/%u
+AuthorizedKeysFile .ssh/authorized_keys
 PasswordAuthentication no
 ChallengeResponseAuthentication no
 UsePAM yes
@@ -25,9 +25,10 @@ PrintMotd no
 
 # Logging
 SyslogFacility AUTH
-LogLevel INFO
+LogLevel DEBUG3
 
 # Other settings
 UseDNS no
 ClientAliveInterval 300
 ClientAliveCountMax 2
+StrictModes no

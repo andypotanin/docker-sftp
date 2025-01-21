@@ -1,39 +1,59 @@
+# Worker configuration
+# See template https://github.com/udx/worker/blob/latest/src/configs/worker.yml
+# See documentation https://github.com/udx/worker/blob/latest/src/configs/_worker_config.md
 ---
 kind: workerConfig
 version: udx.io/worker-v1/config
 config:
   env:
     # Node environment
-    NODE_ENV: ${NODE_ENV}
-    PORT: ${PORT}
-    NODE_PORT: ${NODE_PORT}
+    NODE_ENV: ${NODE_ENV:-production}
+    PORT: ${PORT:-8080}
+    NODE_PORT: ${NODE_PORT:-8080}
+    DEBUG: ${DEBUG:-ssh*,sftp*,k8gate*}
     
     # Service flags
-    SERVICE_ENABLE_SSHD: ${SERVICE_ENABLE_SSHD}
-    SERVICE_ENABLE_API: ${SERVICE_ENABLE_API}
-    SERVICE_ENABLE_FIREBASE: ${SERVICE_ENABLE_FIREBASE}
-    USE_GKE_GCLOUD_AUTH_PLUGIN: ${USE_GKE_GCLOUD_AUTH_PLUGIN}
+    SERVICE_ENABLE_SSHD: ${SERVICE_ENABLE_SSHD:-true}
+    SERVICE_ENABLE_API: ${SERVICE_ENABLE_API:-true}
+    SERVICE_ENABLE_FIREBASE: ${SERVICE_ENABLE_FIREBASE:-false}
 
     # Kubernetes configuration
     KUBERNETES_CLUSTER_ENDPOINT: ${KUBERNETES_CLUSTER_ENDPOINT}
     KUBERNETES_CLUSTER_NAME: ${KUBERNETES_CLUSTER_NAME}
-    KUBERNETES_CLUSTER_NAMESPACE: ${KUBERNETES_CLUSTER_NAMESPACE}
-    KUBERNETES_CLUSTER_USER_TOKEN: ${KUBERNETES_CLUSTER_USER_TOKEN}
-    KUBERNETES_CLUSTER_SERVICEACCOUNT: ${KUBERNETES_CLUSTER_SERVICEACCOUNT}
+    KUBERNETES_CLUSTER_NAMESPACE: ${KUBERNETES_CLUSTER_NAMESPACE:-default}
+    KUBERNETES_CLUSTER_SERVICEACCOUNT: ${KUBERNETES_CLUSTER_SERVICEACCOUNT:-default}
     KUBERNETES_CLUSTER_CERTIFICATE: ${KUBERNETES_CLUSTER_CERTIFICATE}
-    KUBERNETES_CLUSTER_USER_SECRET: ${KUBERNETES_CLUSTER_USER_SECRET}
-    KUBERNETES_CLUSTER_CONTEXT: ${KUBERNETES_CLUSTER_CONTEXT}
+    KUBERNETES_CLUSTER_CONTEXT: ${KUBERNETES_CLUSTER_CONTEXT:-default}
 
     # GitHub configuration
+    GITHUB_API_URL: ${GITHUB_API_URL:-https://api.github.com}
     ACCESS_TOKEN: ${ACCESS_TOKEN}
-    ALLOW_SSH_ACCESS_ROLES: ${ALLOW_SSH_ACCESS_ROLES}
+    ALLOW_SSH_ACCESS_ROLES: ${ALLOW_SSH_ACCESS_ROLES:-admin,developer}
 
     # SSH configuration
     DIRECTORY_KEYS_BASE: /etc/ssh/authorized_keys.d
     PASSWORD_FILE: /etc/passwd
     PASSWORDS_TEMPLATE: alpine.passwords
+    SSH_HOST_KEY_DIR: /etc/ssh
+    SSH_AUTHORIZED_KEYS_DIR: /etc/ssh/authorized_keys.d
+    SSH_CONFIG_FILE: /etc/ssh/sshd_config
+
+    # Logging configuration
+    LOG_LEVEL: ${LOG_LEVEL:-info}
+    LOG_FORMAT: ${LOG_FORMAT:-json}
+    LOG_DIR: /var/log
 
   secrets:
     ACCESS_TOKEN: ${ACCESS_TOKEN}
     KUBERNETES_CLUSTER_USER_TOKEN: ${KUBERNETES_CLUSTER_USER_TOKEN}
     KUBERNETES_CLUSTER_USER_SECRET: ${KUBERNETES_CLUSTER_USER_SECRET}
+    GITHUB_TOKEN: ${GITHUB_TOKEN}
+
+  # Health check configuration
+  health:
+    enabled: true
+    port: ${PORT:-8080}
+    path: /health
+    interval: 30s
+    timeout: 5s
+    retries: 3

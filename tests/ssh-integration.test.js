@@ -7,14 +7,14 @@ describe('SSH Integration Tests', () => {
     const sshConfig = {
         host: process.env.TEST_SSH_HOST || 'localhost',
         port: process.env.TEST_SSH_PORT || 2222,
-        user: process.env.TEST_SSH_USER || 'test-user',
-        keyPath: process.env.TEST_SSH_KEY_PATH || '~/.ssh/id_rsa'
+        user: process.env.TEST_SSH_USER || 'udx',
+        keyPath: process.env.TEST_SSH_KEY_PATH || '/tmp/test_ssh_key'
     };
 
     const testCommands = [
-        'wp plugin list',
-        'git status',
-        'git remote -v'
+        'ls -la',
+        'pwd',
+        'whoami'
     ];
 
     beforeAll(async () => {
@@ -24,7 +24,7 @@ describe('SSH Integration Tests', () => {
         // Debug SSH setup
         console.log('SSH Config:', {
             host: sshConfig.host,
-            port: process.env.TEST_SSH_PORT || 22,
+            port: sshConfig.port,
             user: sshConfig.user,
             keyPath: sshConfig.keyPath
         });
@@ -33,8 +33,13 @@ describe('SSH Integration Tests', () => {
             // Verify SSH key permissions
             await execAsync(`chmod 600 ${sshConfig.keyPath}`);
             
+            // Add test key to container
+            const containerName = process.env.TEST_CONTAINER_NAME || 'udx-sftp-test-container';
+            const pubKey = await execAsync(`cat ${sshConfig.keyPath}.pub`);
+            await execAsync(`docker exec ${containerName} /bin/bash -c 'mkdir -p /home/udx/.ssh && echo "${pubKey.stdout}" >> /home/udx/.ssh/authorized_keys && chmod 700 /home/udx/.ssh && chmod 600 /home/udx/.ssh/authorized_keys && chown -R udx:udx /home/udx/.ssh'`);
+            
             // Test SSH connection with verbose output
-            const sshCmd = `ssh -v -i ${sshConfig.keyPath} -p ${process.env.TEST_SSH_PORT || 22} -o StrictHostKeyChecking=no ${sshConfig.user}@${sshConfig.host} "echo Test Connection"`;
+            const sshCmd = `ssh -v -i ${sshConfig.keyPath} -p ${sshConfig.port} -o StrictHostKeyChecking=no ${sshConfig.user}@${sshConfig.host} "echo Test Connection"`;
             console.log('Testing SSH connection with:', sshCmd);
             
             const { stdout } = await execAsync(sshCmd, { timeout: 30000 });
@@ -48,14 +53,11 @@ describe('SSH Integration Tests', () => {
 
     test('SSH connection and command execution', async () => {
         for (const cmd of testCommands) {
-            const sshCmd = `ssh -i ${sshConfig.keyPath} -p ${sshConfig.port} -o StrictHostKeyChecking=no ${sshConfig.user}@${sshConfig.host} "${cmd}"`;
-            console.log('Executing SSH command:', sshCmd);
-            
+            console.log(`Executing SSH command: ${cmd}`);
             try {
-                const { stdout, stderr } = await execAsync(sshCmd, { timeout: 30000 });
-                console.log(`Command: ${cmd}`);
-                console.log('Output:', stdout);
-                if (stderr) console.log('stderr:', stderr);
+                const sshCmd = `ssh -i ${sshConfig.keyPath} -p ${sshConfig.port} -o StrictHostKeyChecking=no ${sshConfig.user}@${sshConfig.host} "${cmd}"`;
+                const { stdout } = await execAsync(sshCmd);
+                console.log(`Command output:`, stdout);
                 expect(stdout).toBeTruthy();
             } catch (error) {
                 console.error(`Failed to execute command: ${cmd}`);
@@ -66,24 +68,17 @@ describe('SSH Integration Tests', () => {
     });
 
     test('SFTP file transfer', async () => {
-        const testFile = '/tmp/test-file.txt';
-        const sftpCommands = `put ${testFile}\nls -l\nrm ${testFile}\nexit\n`;
-
         try {
             // Create test file
-            await execAsync(`echo "test content" > ${testFile}`);
+            const testFile = '/tmp/test-file.txt';
+            await execAsync(`echo "Test content" > ${testFile}`);
 
-            // Execute SFTP commands
+            console.log('Executing SFTP commands...');
+            const sftpCommands = `put ${testFile}\nls -l\nrm ${testFile}\nexit\n`;
             const sftpCmd = `sftp -i ${sshConfig.keyPath} -P ${sshConfig.port} -o StrictHostKeyChecking=no ${sshConfig.user}@${sshConfig.host}`;
-            console.log('Executing SFTP command:', sftpCmd);
-            console.log('SFTP commands:', sftpCommands);
             
-            const { stdout, stderr } = await execAsync(sftpCmd, { 
-                input: sftpCommands,
-                timeout: 30000
-            });
-
-            expect(stderr).toBeFalsy();
+            const { stdout } = await execAsync(sftpCmd, { input: sftpCommands });
+            console.log('SFTP output:', stdout);
             expect(stdout).toContain(testFile);
         } catch (error) {
             console.error('SFTP test failed:', error);

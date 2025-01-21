@@ -1,3 +1,7 @@
+# Worker Services Configuration
+# See CLI https://github.com/udx/worker/blob/latest/CLI.md
+# See template https://github.com/udx/worker/blob/latest/src/configs/services.yml
+# See documentation https://github.com/udx/worker/blob/latest/src/configs/_worker_services.md
 ---
 kind: workerService
 version: udx.io/worker-v1/service

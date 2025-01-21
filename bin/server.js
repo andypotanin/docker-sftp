@@ -36,22 +36,6 @@ const { exec } = require('child_process');
 const app = express();
 const utility = require('../lib/utility');
 const md5 = require('md5');
-const normalizeMessage = require('../lib/normalize-message');
-
-/**
- * Parse JSON safely
- * @param {string} data Data to parse
- * @returns {any} Parsed data or original if parsing fails
- */
-function json_parse(data) {
-    try {
-        return JSON.parse(data);
-    } catch (error) {
-        debug('JSON parse error:', error);
-        return data;
-    }
-}
-
 const rateLimit = require('../lib/rate-limit');
 const events = require('../lib/events');
 

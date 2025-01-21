@@ -22,9 +22,6 @@ config:
     GIT_OWNER: "${GIT_OWNER}"
     GIT_BRANCH: "${GIT_BRANCH}"
     
-    # Google Cloud Configuration
-    USE_GKE_GCLOUD_AUTH_PLUGIN: "True"
-    
     # SSH Configuration
     ALLOW_SSH_ACCESS_ROLES: "${ALLOW_SSH_ACCESS_ROLES}"
 
