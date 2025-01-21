@@ -139,32 +139,44 @@ jobs:
           -p 8080:8080 \
           sftp-gateway:${{ steps.version.outputs.TAG }}
 
-        # Start the container
-        echo "Starting container..."
+        # Start the container with required environment variables
+        echo "Starting container with environment variables..."
         docker start test-container
+        docker exec test-container sh -c 'export SERVICE_ENABLE_SSHD=true && export SERVICE_ENABLE_API=true && export NODE_ENV=test'
         
         # Wait for container to initialize
         sleep 5
         
-        # Verify supervisord configuration and service status
-        echo "Verifying supervisord configuration and services..."
+        # Start and verify supervisord services
+        echo "Starting and verifying supervisord services..."
         docker exec test-container sh -c '
-          echo "Supervisord version:"
-          supervisord --version
-          
-          echo "\nSupervisord configuration:"
-          ls -la /etc/supervisor/conf.d/
-          cat /etc/supervisor/conf.d/services.conf
-          
-          echo "\nValidating configuration:"
-          supervisord -c /etc/supervisor/supervisord.conf -n -t
-          
-          echo "\nStarting supervisord:"
+          echo "Starting supervisord..."
           supervisord -c /etc/supervisor/supervisord.conf
           sleep 5
           
-          echo "\nChecking service status:"
+          echo "\nChecking supervisord status:"
           supervisorctl status
+          
+          echo "\nVerifying SSHD service:"
+          if ! supervisorctl status sshd | grep "RUNNING"; then
+            echo "SSHD service not running"
+            exit 1
+          fi
+          
+          echo "\nVerifying K8Gate API service:"
+          if ! supervisorctl status k8gate | grep "RUNNING"; then
+            echo "K8Gate API service not running"
+            exit 1
+          fi
+          
+          echo "\nVerifying SSH key sync service:"
+          if ! supervisorctl status ssh_keys_sync | grep "RUNNING"; then
+            echo "SSH key sync service not running"
+            exit 1
+          fi
+          
+          echo "\nChecking service logs:"
+          tail -n 50 /var/log/{sshd,k8gate,ssh-keys-sync}.log
         '
         
         # Wait for container to start and show logs
