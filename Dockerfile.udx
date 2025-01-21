@@ -10,42 +10,47 @@ LABEL version="0.9.0" \
 
 # Set environment variables
 ENV NODE_ENV=production \
-    SERVICE_ENABLE_SSHD=true \
-    SERVICE_ENABLE_API=true \
-    SERVICE_ENABLE_FIREBASE=false \
-    PORT=8080 \
-    NODE_PORT=8080 \
-    DEBUG=ssh*,sftp*,k8gate* \
     KUBECTL_VERSION=v1.28.3
 
-# Install system dependencies in a single layer
-RUN apk add --no-cache \
-    openssh \
-    openssh-server \
-    python3 \
-    py3-pip \
-    curl \
-    bash \
-    git \
-    && python3 -m pip install --break-system-packages --no-cache-dir google-cloud-sdk \
-    && curl -LO "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/$(uname -m)/kubectl" \
-    && chmod +x kubectl \
-    && mv kubectl /usr/local/bin/ \
-    && mkdir -p \
+# Install system dependencies
+RUN apk update && \
+    apk add --no-cache \
+        openssh \
+        openssh-server \
+        python3 \
+        py3-pip \
+        curl \
+        bash \
+        git \
+        sudo
+
+# Install Google Cloud SDK
+RUN python3 -m pip install --no-cache-dir google-cloud-cli && \
+    gcloud --version
+
+# Install kubectl
+RUN curl -LO "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/$(uname -m)/kubectl" && \
+    chmod +x kubectl && \
+    mv kubectl /usr/local/bin/ && \
+    kubectl version --client
+
+# Setup SSH and user
+RUN mkdir -p \
         /home/udx/.kube \
         /etc/ssh \
         /etc/ssh/authorized_keys.d \
         /var/log \
-        /var/run/sshd \
-    && ssh-keygen -A \
-    && echo "PasswordAuthentication no" >> /etc/ssh/sshd_config \
-    && echo "ChallengeResponseAuthentication no" >> /etc/ssh/sshd_config \
-    && echo "PermitRootLogin no" >> /etc/ssh/sshd_config \
-    && adduser -D -h /home/udx -s /bin/bash udx \
-    && chown -R udx:udx /home/udx
+        /var/run/sshd && \
+    ssh-keygen -A && \
+    echo "PasswordAuthentication no" >> /etc/ssh/sshd_config && \
+    echo "ChallengeResponseAuthentication no" >> /etc/ssh/sshd_config && \
+    echo "PermitRootLogin no" >> /etc/ssh/sshd_config && \
+    adduser -D -h /home/udx -s /bin/bash udx && \
+    echo "udx ALL=(ALL) NOPASSWD: /usr/sbin/sshd" >> /etc/sudoers.d/udx && \
+    chown -R udx:udx /home/udx
 
 # Set working directory and switch to non-root user
-WORKDIR /opt/sources/udx/k8gate
+WORKDIR /home/udx
 USER udx
 
 # Copy package files
@@ -58,12 +63,11 @@ RUN npm ci --only=production
 COPY --chown=udx:udx . .
 
 # Expose ports
-EXPOSE 22 8080
+EXPOSE 3000 22
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD nc -z localhost 22 || exit 1
+    CMD curl -f http://localhost:3000/health || exit 1
 
-# Set entrypoint and default command
-ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
-CMD ["/usr/sbin/sshd", "-D", "-e"]
+# Start SSH daemon and application
+CMD ["/bin/bash", "-c", "sudo /usr/sbin/sshd && npm start"]
