@@ -4,17 +4,28 @@ const yaml = require('js-yaml');
 const path = require('path');
 
 function convertToSupervisorConfig(services) {
+    console.log('Converting services:', JSON.stringify(services, null, 2));
     let supervisordConfig = '';
     
     for (const service of services) {
+        console.log(`Processing service: ${service.name}`);
         supervisordConfig += `[program:${service.name}]\n`;
         supervisordConfig += `command=${service.command}\n`;
+        
         // Handle environment variable interpolation for autostart
-        const autostart = service.autostart.replace(/\${([^}]+)}/g, '%(ENV_$1)s');
-        supervisordConfig += `autostart=${autostart}\n`;  // Use environment variable
-        supervisordConfig += `startsecs=10\n`;    // Wait up to 10 seconds for service to start
-        supervisordConfig += `startretries=3\n`;  // Retry 3 times if service fails to start
+        const autostart = service.autostart.replace(/\${([^}]+)}/g, (match, varName) => {
+            console.log(`Replacing environment variable in autostart: ${varName}`);
+            return `%(ENV_${varName})s`;
+        });
+        supervisordConfig += `autostart=${autostart}\n`;
+        
+        // Add standard supervisor options
+        supervisordConfig += `startsecs=10\n`;
+        supervisordConfig += `startretries=3\n`;
         supervisordConfig += `autorestart=${service.autorestart}\n`;
+        supervisordConfig += `stopwaitsecs=30\n`;
+        supervisordConfig += `killasgroup=true\n`;
+        supervisordConfig += `stopasgroup=true\n`;
         
         if (service.user) {
             supervisordConfig += `user=${service.user}\n`;
@@ -28,9 +39,12 @@ function convertToSupervisorConfig(services) {
         let envVars = [];
         if (service.envs && service.envs.length > 0) {
             envVars = service.envs.map(env => {
-                // Handle ${VAR} style variables
                 if (env.includes('$')) {
-                    return env.replace(/\${([^}]+)}/g, '%(ENV_$1)s');
+                    console.log(`Processing environment variable: ${env}`);
+                    return env.replace(/\${([^}]+)}/g, (match, varName) => {
+                        console.log(`Replacing environment variable: ${varName}`);
+                        return `%(ENV_${varName})s`;
+                    });
                 }
                 return env;
             });
@@ -48,10 +62,15 @@ function convertToSupervisorConfig(services) {
         // Configure logging
         supervisordConfig += `stdout_logfile=/var/log/${service.name}.log\n`;
         supervisordConfig += `stderr_logfile=/var/log/${service.name}.log\n`;
+        supervisordConfig += `stdout_logfile_maxbytes=50MB\n`;
+        supervisordConfig += `stderr_logfile_maxbytes=50MB\n`;
+        supervisordConfig += `stdout_logfile_backups=5\n`;
+        supervisordConfig += `stderr_logfile_backups=5\n`;
         
         supervisordConfig += '\n';
     }
     
+    console.log('Generated supervisord config:', supervisordConfig);
     return supervisordConfig;
 }
 

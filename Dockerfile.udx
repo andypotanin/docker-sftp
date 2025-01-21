@@ -97,26 +97,24 @@ RUN mkdir -p /etc/supervisor/conf.d /var/log/supervisor /var/run /etc/worker && 
 COPY --chown=root:root static/etc/supervisor/supervisord.conf /etc/supervisor/supervisord.conf
 COPY --chown=root:root .github/workflows/services.yml /etc/worker/services.yml
 
-# Set up services configuration
+# Set up services configuration and convert to supervisord format
 RUN npm install -g js-yaml && \
     chmod 644 /etc/worker/services.yml && \
-    mkdir -p /usr/local/bin
+    mkdir -p /usr/local/bin && \
+    echo "Setting up Node.js environment..." && \
+    node --version && \
+    npm --version && \
+    echo "Installed packages:" && \
+    npm list -g
 
-# Install convert-services script
+# Install convert-services script and configure services
 COPY --chown=root:root bin/convert-services.js /usr/local/bin/
 RUN chmod +x /usr/local/bin/convert-services.js && \
-    ln -sf /usr/local/bin/convert-services.js /usr/local/bin/convert-services
-
-# Set up services configuration
-COPY --chown=root:root bin/convert-services.js /usr/local/bin/
-RUN chmod +x /usr/local/bin/convert-services.js && \
-    mkdir -p /etc/worker && \
+    mkdir -p /etc/worker /etc/supervisor/conf.d && \
     chown root:root /etc/worker && \
     chmod 755 /etc/worker && \
     chown -R root:root /etc/supervisor && \
-    chmod 644 /etc/supervisor/supervisord.conf && \
-    chmod 644 /etc/supervisor/conf.d/services.conf && \
-    supervisord -c /etc/supervisor/supervisord.conf -t
+    chmod 644 /etc/supervisor/supervisord.conf
 
 # Fix SSH config and logging permissions
 RUN chmod 644 /etc/ssh/sshd_config && \

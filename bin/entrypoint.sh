@@ -119,14 +119,35 @@ echo "Services configuration input:"
 cat /etc/worker/services.yml
 
 echo "Converting services.yml to supervisord format..."
-/usr/local/bin/convert-services.js /etc/worker/services.yml /etc/supervisor/conf.d/services.conf
-if [ $? -ne 0 ]; then
+echo "Node.js version: $(node --version)"
+echo "Script location: $(which convert-services.js)"
+echo "Script permissions:"
+ls -l /usr/local/bin/convert-services.js
+
+# Ensure script is executable
+chmod +x /usr/local/bin/convert-services.js
+
+echo "Services.yml content:"
+cat /etc/worker/services.yml
+
+echo "Converting services using Node.js directly..."
+node /usr/local/bin/convert-services.js /etc/worker/services.yml /etc/supervisor/conf.d/services.conf
+CONVERT_EXIT=$?
+
+echo "Convert script exit code: $CONVERT_EXIT"
+if [ $CONVERT_EXIT -ne 0 ]; then
     echo "Error: Failed to convert services configuration"
-    echo "Node.js version: $(node --version)"
+    echo "Script content:"
+    cat /usr/local/bin/convert-services.js
+    echo "Services.yml content:"
+    cat /etc/worker/services.yml
     echo "Installed packages:"
     npm list -g
     exit 1
 fi
+
+echo "Generated supervisord configuration:"
+cat /etc/supervisor/conf.d/services.conf
 
 echo "Generated supervisord configuration:"
 cat /etc/supervisor/conf.d/services.conf
@@ -198,74 +219,6 @@ if [[ "${SERVICE_ENABLE_API}" == "true" ]]; then
     fi
 fi
     
-    # Additional API health check
-    echo "Checking API health..."
-    timeout 30 bash -c 'until curl -sf http://localhost:8080/health > /dev/null; do sleep 1; done' || {
-        echo "Error: API health check failed"
-        curl -v http://localhost:8080/health || true
-        exit 1
-    }
-fi
-
-# Monitor logs and keep container running
-echo "All services started successfully. Monitoring logs..."
-tail -F /var/log/{sshd,k8gate,ssh-keys-sync,auth}.log | grep --line-buffered -E "error|warn|debug|info|ERROR|WARN|DEBUG|INFO" &
-
-# Wait for supervisord
-wait $SUPERVISOR_PID
-
-# Wait for supervisord to be ready
-sleep 2
-
-# Start services based on environment variables
-echo "Starting services..."
-
-# Start SSHD if enabled
-if [[ "${SERVICE_ENABLE_SSHD}" == "true" ]]; then
-    echo "Starting SSHD service..."
-    supervisorctl start sshd || { echo "Error starting SSHD service"; exit 1; }
-    sleep 2
-    if ! pgrep sshd > /dev/null; then
-        echo "ERROR: SSHD failed to start"
-        supervisorctl status
-        exit 1
-    fi
-    echo "SSHD started successfully"
-
-    echo "Starting SSH key sync service..."
-    supervisorctl start ssh_keys_sync || { echo "Error starting SSH key sync service"; exit 1; }
-    sleep 2
-    if ! pgrep -f "controller.keys.js" > /dev/null; then
-        echo "ERROR: SSH key sync service failed to start"
-        supervisorctl status
-        exit 1
-    fi
-    echo "SSH key sync service started successfully"
-fi
-
-# Start API if enabled
-if [[ "${SERVICE_ENABLE_API}" == "true" ]]; then
-    echo "Starting API service..."
-    supervisorctl start k8gate || { echo "Error starting API service"; exit 1; }
-    
-    # Wait for API to be ready
-    echo "Waiting for API to be healthy..."
-    retry_count=0
-    while [ $retry_count -lt 30 ]; do
-        if curl -sf http://localhost:8080/health > /dev/null 2>&1; then
-            echo "API is healthy"
-            break
-        fi
-        echo "Waiting for API to start... (attempt $((retry_count + 1))/30)"
-        retry_count=$((retry_count + 1))
-        sleep 1
-    done
-    
-    if [ $retry_count -eq 30 ]; then
-        echo "ERROR: API health check failed"
-        supervisorctl status
-        curl -v http://localhost:8080/health || true
-        exit 1
     fi
 fi
 
