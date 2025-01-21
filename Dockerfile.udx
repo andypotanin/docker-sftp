@@ -26,10 +26,12 @@ RUN apk update && \
         netcat-openbsd
 
 # Install kubectl
-RUN curl -LO "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/$(uname -m)/kubectl" && \
+RUN ARCH=$(case $(uname -m) in x86_64) echo "amd64" ;; aarch64) echo "arm64" ;; *) echo "amd64" ;; esac) && \
+    curl -LO "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/${ARCH}/kubectl" && \
     chmod +x kubectl && \
     mv kubectl /usr/local/bin/ && \
-    kubectl version --client
+    echo "Installed kubectl version:" && \
+    kubectl version --client=true --output=yaml
 
 # Setup SSH and user
 RUN mkdir -p \
