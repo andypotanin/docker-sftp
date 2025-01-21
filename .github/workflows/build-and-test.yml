@@ -70,16 +70,23 @@ jobs:
         sudo cp /tmp/test_key.pub /etc/ssh/authorized_keys.d/test-user
         sudo chmod 644 /etc/ssh/authorized_keys.d/test-user
 
-        # Prepare worker configuration directory
+        # Set up worker configuration with proper permissions
+        echo "Setting up worker configuration..."
         sudo mkdir -p /etc/worker/configs
-        sudo cp .github/workflows/services.yml /etc/worker/services.yml
-        sudo cp .github/workflows/services.yml /etc/worker/configs/services.yml
-        sudo chmod -R 755 /etc/worker
+        sudo cp src/configs/services.yml /etc/worker/services.yml
+        sudo cp src/configs/services.yml /etc/worker/configs/services.yml
+        sudo chmod 755 /etc/worker
+        sudo chmod 755 /etc/worker/configs
+        sudo chmod 644 /etc/worker/services.yml
+        sudo chmod 644 /etc/worker/configs/services.yml
         sudo chown -R root:root /etc/worker
+        
         echo "Worker configuration contents:"
         cat /etc/worker/services.yml
+        echo "Configuration permissions:"
+        ls -la /etc/worker/services.yml
 
-        # Test worker binary and configuration
+        # Verify worker binary and configuration
         echo "Testing worker binary..."
         docker run --rm sftp-gateway:${{ steps.version.outputs.TAG }} worker --version
 
@@ -94,78 +101,7 @@ jobs:
           -e STATE_PROVIDER=local \
           sftp-gateway:${{ steps.version.outputs.TAG }} worker validate /etc/worker/services.yml
         
-        # Prepare worker configuration directory
-        sudo mkdir -p /etc/worker/configs
-        sudo cp .github/workflows/services.yml /etc/worker/services.yml
-        sudo cp .github/workflows/services.yml /etc/worker/configs/services.yml
-        sudo chmod -R 755 /etc/worker
-        sudo chown -R root:root /etc/worker
-        echo "Worker configuration contents:"
-        cat /etc/worker/services.yml
-        
-        # Test worker binary and configuration
-        echo "Testing worker binary..."
-        docker run --rm sftp-gateway:${{ steps.version.outputs.TAG }} worker --version
-        
-        echo "Testing worker configuration validation..."
-        docker run --rm \
-          -v /etc/worker:/etc/worker:ro \
-          -e WORKER_DEBUG=true \
-          -e DEBUG=worker:*,ssh:*,k8gate:* \
-          -e NODE_ENV=test \
-          -e SERVICE_ENABLE_SSHD=true \
-          -e SERVICE_ENABLE_API=true \
-          -e STATE_PROVIDER=local \
-          sftp-gateway:${{ steps.version.outputs.TAG }} worker validate /etc/worker/services.yml
-        
-        # Verify worker configuration directory structure
-        echo "Verifying worker configuration structure..."
-        docker run --rm \
-          -v /etc/worker:/etc/worker:ro \
-          sftp-gateway:${{ steps.version.outputs.TAG }} \
-          ls -la /etc/worker/
-        
-        # Prepare worker configuration directory
-        sudo mkdir -p /etc/worker/configs
-        sudo cp .github/workflows/services.yml /etc/worker/services.yml
-        sudo cp .github/workflows/services.yml /etc/worker/configs/services.yml
-        sudo chmod -R 755 /etc/worker
-        sudo chown -R root:root /etc/worker
-        echo "Worker configuration contents:"
-        cat /etc/worker/services.yml
-        
-        # Test worker binary and configuration
-        echo "Testing worker binary..."
-        docker run --rm sftp-gateway:${{ steps.version.outputs.TAG }} worker --version
-        
-        echo "Testing worker configuration validation..."
-        docker run --rm \
-          -v /etc/worker:/etc/worker:ro \
-          -e WORKER_DEBUG=true \
-          -e DEBUG=worker:*,ssh:*,k8gate:* \
-          -e NODE_ENV=test \
-          -e SERVICE_ENABLE_SSHD=true \
-          -e SERVICE_ENABLE_API=true \
-          -e STATE_PROVIDER=local \
-          sftp-gateway:${{ steps.version.outputs.TAG }} worker validate /etc/worker/services.yml
-        
-        # Verify worker configuration directory structure
-        echo "Verifying worker configuration structure..."
-        docker run --rm \
-          -v /etc/worker:/etc/worker:ro \
-          sftp-gateway:${{ steps.version.outputs.TAG }} \
-          ls -la /etc/worker/
-        
-        # Prepare worker configuration directory
-        sudo mkdir -p /etc/worker/configs
-        sudo cp .github/workflows/services.yml /etc/worker/services.yml
-        sudo cp .github/workflows/services.yml /etc/worker/configs/services.yml
-        sudo chmod -R 755 /etc/worker
-        sudo chown -R root:root /etc/worker
-        echo "Worker configuration contents:"
-        cat /etc/worker/services.yml
-
-        # Create worker configuration directory in container
+        # Create test container with proper mounts
         docker create --name test-container \
           --privileged \
           -e NODE_ENV=test \
@@ -173,6 +109,7 @@ jobs:
           -e SERVICE_ENABLE_API=true \
           -e DEBUG=k8gate:*,api:*,auth:*,ssh:*,worker:* \
           -e SERVICE_ENABLE_K8S=false \
+          -v /etc/worker:/etc/worker:ro \
           -e ACCESS_TOKEN=${ACCESS_TOKEN} \
           -e KUBERNETES_CLUSTER_ENDPOINT=${KUBERNETES_CLUSTER_ENDPOINT} \
           -e KUBERNETES_CLUSTER_NAME=${KUBERNETES_CLUSTER_NAME} \
@@ -195,11 +132,22 @@ jobs:
           -p 8080:8080 \
           sftp-gateway:${{ steps.version.outputs.TAG }}
 
-        # Copy services.yml into container
-        docker cp .github/workflows/services.yml test-container:/etc/worker/services.yml
-        docker cp .github/workflows/services.yml test-container:/etc/worker/configs/services.yml
-
-        # Start the container
+        # Start the container and verify worker setup
+        echo "Starting container with worker configuration..."
+        docker start test-container
+        
+        # Verify worker configuration
+        echo "Verifying worker configuration in container..."
+        docker exec test-container sh -c '
+          echo "Worker binary version:"
+          worker --version
+          echo "\nWorker configuration files:"
+          ls -la /etc/worker/
+          echo "\nServices configuration:"
+          cat /etc/worker/services.yml
+          echo "\nValidating configuration:"
+          worker validate /etc/worker/services.yml --debug
+        '
         docker start test-container
         
         # Wait for container to start and show logs
