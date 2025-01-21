@@ -1,49 +1,55 @@
+version: "1.0"
+kind: "worker"
 services:
   sshd:
     command: "/usr/sbin/sshd -D -f /etc/ssh/sshd_config -e"
-    autostart: "${SERVICE_ENABLE_SSHD}"
+    autostart: "${SERVICE_ENABLE_SSHD:-true}"
     autorestart: true
     user: "root"
     envs:
       - DEBUG=ssh:*,auth:*
       - HOME=/root
+      - NODE_ENV=${NODE_ENV:-production}
     log_file: "/var/log/sshd.log"
 
   k8gate:
     command: "node /opt/sources/rabbitci/rabbit-ssh/bin/server.js"
-    autostart: "${SERVICE_ENABLE_API}"
+    autostart: "${SERVICE_ENABLE_API:-true}"
     autorestart: true
     user: "udx"
     cwd: "/opt/sources/rabbitci/rabbit-ssh"
     envs:
       - DEBUG=k8gate:*,api:*,auth:*,ssh:*
-      - NODE_ENV=production
+      - NODE_ENV=${NODE_ENV:-production}
       - PORT=8080
       - NODE_PORT=8080
       - HOME=/home/udx
-      - SERVICE_ENABLE_API=true
-      - SERVICE_ENABLE_SSHD=true
+      - SERVICE_ENABLE_API=${SERVICE_ENABLE_API:-true}
+      - SERVICE_ENABLE_SSHD=${SERVICE_ENABLE_SSHD:-true}
+      - STATE_PROVIDER=${STATE_PROVIDER:-local}
     healthcheck:
-      http:
-        port: "${NODE_PORT}"
-        path: "/health"
-        interval: 30
-        timeout: 10
-        retries: 3
+      type: "http"
+      port: 8080
+      path: "/health"
+      interval: 30
+      timeout: 10
+      retries: 3
     log_file: "/var/log/k8gate.log"
 
   ssh_keys_sync:
     command: "node /opt/sources/rabbitci/rabbit-ssh/bin/controller.keys.js"
-    autostart: "${SERVICE_ENABLE_SSHD}"
+    autostart: "${SERVICE_ENABLE_SSHD:-true}"
     autorestart: true
     user: "udx"
     cwd: "/opt/sources/rabbitci/rabbit-ssh"
     envs:
       - DEBUG=ssh:keys:*,auth:*
+      - NODE_ENV=${NODE_ENV:-production}
       - DIRECTORY_KEYS_BASE=/etc/ssh/authorized_keys.d
       - PASSWORD_FILE=/etc/passwd
       - PASSWORDS_TEMPLATE=alpine.passwords
       - HOME=/home/udx
+      - STATE_PROVIDER=${STATE_PROVIDER:-local}
     depends_on:
       - sshd
     interval: 300

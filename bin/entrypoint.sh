@@ -85,9 +85,10 @@ export NODE_PORT=8080
 echo "Starting services from worker configuration..."
 
 # Check worker binary and validate configuration
-worker_path=$(which worker)
-if [ -z "$worker_path" ]; then
-    echo "Error: worker binary not found in PATH"
+worker_path="/usr/local/bin/worker"
+if [ ! -x "$worker_path" ]; then
+    echo "Error: worker binary not found or not executable at $worker_path"
+    ls -la /usr/local/bin/worker* || true
     echo "PATH=$PATH"
     exit 1
 fi
@@ -100,14 +101,6 @@ export DEBUG="${DEBUG:-*},worker:*"
 echo "Worker binary: $worker_path ($(ls -l $worker_path))"
 echo "Worker version: $($worker_path --version)"
 
-# Initialize worker daemon
-echo "Initializing worker daemon..."
-$worker_path init || {
-    echo "Failed to initialize worker daemon"
-    $worker_path init --debug 2>&1
-    exit 1
-}
-
 # Verify services configuration exists and is readable
 config_file="/etc/worker/services.yml"
 if [ ! -f "$config_file" ]; then
@@ -116,8 +109,17 @@ if [ ! -f "$config_file" ]; then
     exit 1
 fi
 
+# Verify configuration file permissions and ownership
+chown root:root "$config_file"
+chmod 644 "$config_file"
+
+# Show configuration contents for debugging
+echo "Services configuration contents:"
+cat "$config_file"
+
 # Ensure proper permissions on config file
 chmod 644 "$config_file"
+chown root:root "$config_file"
 
 # Validate services configuration
 echo "Validating services configuration..."
@@ -125,6 +127,16 @@ $worker_path validate "$config_file" || {
     echo "Error: Invalid services configuration"
     echo "Configuration contents:"
     cat "$config_file"
+    echo "Worker debug output:"
+    $worker_path validate "$config_file" --debug 2>&1
+    exit 1
+}
+
+# Initialize worker daemon
+echo "Initializing worker daemon..."
+$worker_path init || {
+    echo "Failed to initialize worker daemon"
+    $worker_path init --debug 2>&1
     exit 1
 }
 
@@ -134,6 +146,9 @@ $worker_path list || {
     echo "Error: Failed to list services"
     echo "Service listing output:"
     $worker_path list --debug 2>&1
+    echo "Current configuration:"
+    ls -la /etc/worker/
+    cat "$config_file"
     exit 1
 }
 
@@ -170,10 +185,14 @@ start_service() {
         else
             echo "Warning: Log file ${log_file} not found"
         fi
+        echo "Worker debug output:"
+        WORKER_DEBUG=true $worker_path status --debug || true
+        echo "Configuration file contents:"
+        cat "$config_file"
         return 1
     }
 
-    # Wait for service to be ready
+    # Wait for service to be ready with improved debugging
     echo "Waiting for ${service_name} to be ready..."
     local retries=30
     while [ $retries -gt 0 ]; do
@@ -181,47 +200,36 @@ start_service() {
             echo "${service_name} is ready"
             return 0
         fi
+        echo "Health check failed, retrying in 1s (${retries} attempts left)"
+        if [ -f "${log_file}" ]; then
+            echo "Last 5 lines of ${service_name} logs:"
+            tail -n 5 "${log_file}" || true
+        fi
         retries=$((retries - 1))
         sleep 1
     done
     
     echo "ERROR: ${service_name} failed health check"
+    echo "Full service logs:"
+    cat "${log_file}" || true
     return 1
 }
 
-# Validate services configuration
-config_file="/etc/worker/services.yml"
-if [ ! -f "$config_file" ]; then
-    echo "Error: services.yml not found at $config_file"
-    ls -la /etc/worker/
-    exit 1
-fi
-
-echo "Validating services configuration..."
-$worker_path validate "$config_file" || {
-    echo "Error: Invalid services configuration"
-    echo "Configuration contents:"
-    cat "$config_file"
-    exit 1
-}
-
-# Initialize worker daemon with debug logging
+# Initialize worker daemon with debug output
 echo "Initializing worker daemon..."
-$worker_path --debug init || {
+$worker_path init --debug || {
     echo "Failed to initialize worker daemon"
-    $worker_path --debug init 2>&1
+    echo "Worker debug output:"
+    $worker_path init --debug
     exit 1
 }
 
-# List available services with debug output
-echo "Available services:"
-$worker_path --debug list || {
-    echo "ERROR: Failed to list services"
-    echo "Service listing output:"
-    $worker_path --debug list 2>&1
-    echo "Current configuration:"
-    ls -la /etc/worker/
-    cat "$config_file"
+# List available services before starting
+echo "Available services before startup:"
+$worker_path list --debug || {
+    echo "Error: Failed to list services"
+    echo "Worker debug output:"
+    $worker_path list --debug
     exit 1
 }
 
@@ -229,14 +237,29 @@ $worker_path --debug list || {
 if [ -f "/etc/worker/services.yml" ]; then
     # Start SSHD service if enabled
     if [[ "${SERVICE_ENABLE_SSHD}" == "true" ]]; then
+        echo "Starting SSHD services..."
         start_service "sshd" "sshd" "/var/log/sshd.log" "pgrep -f '/usr/sbin/sshd -D'" || exit 1
         start_service "ssh_keys_sync" "controller.keys" "/var/log/ssh-keys-sync.log" "pgrep -f 'controller.keys.js'" || exit 1
     fi
 
     # Start API service if enabled
     if [[ "${SERVICE_ENABLE_API}" == "true" ]]; then
+        echo "Starting API service..."
         start_service "k8gate" "node.*server.js" "/var/log/k8gate.log" "curl -s http://localhost:8080/health > /dev/null" || exit 1
     fi
+
+    # Verify all services started successfully
+    echo "Verifying all services..."
+    $worker_path status --debug || {
+        echo "ERROR: Service verification failed"
+        echo "Worker debug output:"
+        $worker_path status --debug
+        echo "Process status:"
+        ps aux | grep -E "sshd|controller.keys|server.js" || true
+        echo "Log files:"
+        tail -n 50 /var/log/*.log || true
+        exit 1
+    }
 
     # Verify all services are running
     echo "Verifying service status..."
