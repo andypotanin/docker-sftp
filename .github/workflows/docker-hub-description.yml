@@ -1,30 +1,71 @@
-name: Update Docker Hub Description
+name: Update Repository Documentation
 
-# Purpose: Updates the Docker Hub repository description and README
-# Trigger: When docker-description.md changes
-# Output: Updated Docker Hub repository documentation
+# Purpose: Updates documentation across multiple platforms (Docker Hub, GitHub, etc.)
+# Trigger: Manual workflow dispatch only
+# Output: Updated documentation on various platforms
 
 on:
-  push:
-    branches:
-      - master
-    paths:
-      - 'docker-description.md'
-      - '.github/workflows/docker-hub-description.yml'
+  workflow_dispatch:
+    inputs:
+      update_dockerhub:
+        description: 'Update Docker Hub description'
+        type: boolean
+        default: true
+      update_github:
+        description: 'Update GitHub repository info'
+        type: boolean
+        default: true
+      update_npm:
+        description: 'Update NPM package info'
+        type: boolean
+        default: false
 
 jobs:
-  update-dockerhub:
-    name: Update Repository Docs
+  update-documentation:
+    name: Update Platform Documentation
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
       
       - name: Update Docker Hub Description
+        if: inputs.update_dockerhub
         uses: peter-evans/dockerhub-description@v3
         with:
           username: ${{ secrets.DOCKER_HUB_USERNAME }}
           password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
           repository: usabilitydynamics/k8-container-gate
           short-description: "K8-native SSH/SFTP gateway with GitHub auth and flexible state management"
-          readme-filepath: ./docker-description.md
+          readme-filepath: ./docs/docker-hub.md
+
+      - name: Update GitHub Repository Info
+        if: inputs.update_github
+        run: |
+          gh repo edit \
+            --description "K8-native SSH/SFTP gateway with GitHub auth and flexible state management" \
+            --homepage "https://hub.docker.com/r/usabilitydynamics/k8-container-gate" \
+            --topics "kubernetes,ssh,sftp,gateway,github-auth,docker"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update NPM Package Info
+        if: inputs.update_npm
+        run: |
+          if [ -f "package.json" ]; then
+            # Extract current version
+            VERSION=$(node -p "require('./package.json').version")
+            
+            # Update NPM package info
+            npm version $VERSION --no-git-tag-version --allow-same-version
+            
+            # Update package metadata
+            npm pkg set description="K8-native SSH/SFTP gateway with GitHub auth and flexible state management"
+            npm pkg set homepage="https://hub.docker.com/r/usabilitydynamics/k8-container-gate"
+            npm pkg set repository.type="git"
+            npm pkg set repository.url="git+https://github.com/usabilitydynamics/k8-container-gate.git"
+            
+            # Publish to NPM if needed
+            # npm publish
+          fi
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
