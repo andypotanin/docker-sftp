@@ -1,4 +1,4 @@
-name: 🐳 Docker Image Builder
+name: Docker Image Builder
 
 # Purpose: Builds and publishes multi-arch Docker images to Docker Hub
 # Trigger: On push to master and pull requests
@@ -28,38 +28,38 @@ env:
 
 jobs:
   build-and-push:
-    name: 🏗️ Build Multi-Arch Image
+    name: Build Multi-Arch Image
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
 
     steps:
-      - name: 📥 Checkout Repository
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: 📝 Get Version from package.json
+      - name: Get Version from package.json
         id: package_version
         run: |
           VERSION=$(node -p "require('./package.json').version")
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
-      - name: 🔧 Set up QEMU
+      - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
 
-      - name: 🏗️ Set up Docker Buildx
+      - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
         with:
           platforms: ${{ env.PLATFORMS }}
 
-      - name: 🔑 Log in to Docker Hub
+      - name: Log in to Docker Hub
         if: github.event_name != 'pull_request'
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_HUB_USERNAME }}
           password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
 
-      - name: 🏷️ Extract Docker Metadata
+      - name: Extract Docker Metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
@@ -72,7 +72,7 @@ jobs:
             type=ref,event=pr
             type=sha,format=long
 
-      - name: 🚀 Build and Push
+      - name: Build and Push
         uses: docker/build-push-action@v5
         with:
           context: .

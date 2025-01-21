@@ -1,4 +1,4 @@
-name: 🚀 Deploy to Cloud Run
+name: Deploy to Cloud Run
 
 # Purpose: Deploys the container to Google Cloud Run
 # Trigger: On successful Docker build or manual dispatch
@@ -6,7 +6,7 @@ name: 🚀 Deploy to Cloud Run
 
 on:
   workflow_run:
-    workflows: ["🐳 Docker Image Builder"]
+    workflows: ["Docker Image Builder"]
     types:
       - completed
     branches:
@@ -20,7 +20,7 @@ env:
 
 jobs:
   deploy:
-    name: 🌩️ Deploy to Cloud Run
+    name: Deploy to Cloud Run
     runs-on: ubuntu-latest
     if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
 
@@ -29,19 +29,19 @@ jobs:
       id-token: 'write'
 
     steps:
-      - name: 🔑 Google Auth
+      - name: Google Auth
         id: auth
         uses: google-github-actions/auth@v1
         with:
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
 
-      - name: 🔧 Set up Cloud SDK
+      - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v1
         with:
           version: '>= 363.0.0'
 
-      - name: 🚀 Deploy to Cloud Run
+      - name: Deploy to Cloud Run
         id: deploy
         uses: google-github-actions/deploy-cloudrun@v1
         with:
@@ -66,5 +66,5 @@ jobs:
             --service-account=${{ secrets.K8S_SERVICE_ACCOUNT }}
             --tag=v0-9-0
 
-      - name: 📝 Show Output
+      - name: Show Output
         run: echo ${{ steps.deploy.outputs.url }}
