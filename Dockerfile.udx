@@ -136,40 +136,36 @@ RUN echo "Verifying service configuration..." \
     && cat /etc/worker/services.yml \
     && worker validate /etc/worker/services.yml
 
-# Verify worker configuration
+# Verify worker configuration with detailed error handling
 RUN echo "Verifying worker configuration..." && \
+    echo "Configuration locations:" && \
     ls -la /etc/worker/services.yml && \
     ls -la /etc/worker/configs/services.yml && \
+    echo "\nConfiguration contents:" && \
     cat /etc/worker/services.yml && \
-    echo "Testing worker binary..." && \
+    echo "\nTesting worker binary..." && \
     /usr/local/bin/worker --version && \
-    echo "Validating services configuration..." && \
-    WORKER_DEBUG=true /usr/local/bin/worker validate /etc/worker/services.yml && \
-    echo "Worker configuration validated successfully"
-
-# Verify worker configuration
-RUN echo "Verifying worker configuration..." && \
-    ls -la /etc/worker/services.yml && \
-    ls -la /etc/worker/configs/services.yml && \
-    cat /etc/worker/services.yml && \
-    echo "Testing worker binary..." && \
-    /usr/local/bin/worker --version && \
-    echo "Validating services configuration..." && \
+    echo "\nValidating services configuration..." && \
     WORKER_DEBUG=true /usr/local/bin/worker validate /etc/worker/services.yml && \
     echo "Worker configuration validated successfully" || {
-        echo "ERROR: Worker configuration validation failed"
-        echo "Worker debug output:"
+        echo "\nERROR: Worker configuration validation failed"
+        echo "\nWorker debug output:"
         WORKER_DEBUG=true /usr/local/bin/worker list
-        echo "Configuration file contents:"
+        echo "\nConfiguration file contents:"
         cat /etc/worker/services.yml
+        echo "\nService status:"
+        WORKER_DEBUG=true /usr/local/bin/worker status || true
+        echo "\nEnvironment variables:"
+        env | grep -E "WORKER_|SERVICE_|NODE_" || true
         exit 1
     }
 
-# Set up worker configuration directories
+# Set up worker configuration directories with proper permissions
 RUN mkdir -p /home/udx/.cd/configs /etc/worker && \
     chown -R udx:udx /home/udx/.cd && \
-    chmod -R 777 /home/udx/.cd/configs && \
+    chmod -R 755 /home/udx/.cd/configs && \
     chmod -R 755 /etc/worker && \
+    chown -R root:root /etc/worker && \
     touch /home/udx/.cd/configs/merged_worker.yml && \
     chown udx:udx /home/udx/.cd/configs/merged_worker.yml && \
     chmod 644 /home/udx/.cd/configs/merged_worker.yml
