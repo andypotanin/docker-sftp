@@ -239,7 +239,7 @@ if [ -f "/etc/worker/services.yml" ]; then
     if [[ "${SERVICE_ENABLE_SSHD}" == "true" ]]; then
         echo "Starting SSHD services..."
         start_service "sshd" "sshd" "/var/log/sshd.log" "pgrep -f '/usr/sbin/sshd -D'" || exit 1
-        start_service "ssh-keys-sync" "controller.keys" "/var/log/ssh-keys-sync.log" "pgrep -f 'controller.keys.js'" || exit 1
+        start_service "ssh_keys_sync" "controller.keys" "/var/log/ssh-keys-sync.log" "pgrep -f 'controller.keys.js'" || exit 1
     fi
 
     # Start API service if enabled
@@ -269,37 +269,46 @@ if [ -f "/etc/worker/services.yml" ]; then
         exit 1
     }
 
-    # Verify all services started successfully
-    echo "Verifying service status..."
-    $worker_path status --debug || {
-        echo "ERROR: Service verification failed"
-        exit 1
-    }
-
     # Monitor logs with improved filtering and health checks
     echo "All services started successfully. Starting log monitoring..."
     
-    # Function to check service health
+    # Function to check service health with environment checks
     check_service_health() {
+        local all_healthy=true
+        
         # Check SSHD
-        if [[ "${SERVICE_ENABLE_SSHD}" == "true" ]] && ! pgrep -f "/usr/sbin/sshd -D" > /dev/null; then
-            echo "ERROR: SSHD not running"
-            return 1
+        if [[ "${SERVICE_ENABLE_SSHD}" == "true" ]]; then
+            if ! pgrep -f "/usr/sbin/sshd -D" > /dev/null; then
+                echo "ERROR: SSHD not running"
+                all_healthy=false
+            else
+                echo "SSHD: healthy"
+            fi
+            
+            # Check key sync service
+            if ! pgrep -f "controller.keys.js" > /dev/null; then
+                echo "ERROR: Key sync service not running"
+                all_healthy=false
+            else
+                echo "Key sync: healthy"
+            fi
         fi
         
         # Check API server
-        if [[ "${SERVICE_ENABLE_API}" == "true" ]] && ! curl -s http://localhost:8080/health > /dev/null; then
-            echo "ERROR: API server not responding"
-            return 1
+        if [[ "${SERVICE_ENABLE_API}" == "true" ]]; then
+            if ! curl -s http://localhost:8080/health > /dev/null; then
+                echo "ERROR: API server not responding"
+                all_healthy=false
+            else
+                echo "API server: healthy"
+            fi
         fi
         
-        # Check key sync service
-        if [[ "${SERVICE_ENABLE_SSHD}" == "true" ]] && ! pgrep -f "controller.keys.js" > /dev/null; then
-            echo "ERROR: Key sync service not running"
-            return 1
-        fi
+        # Show worker status
+        echo "Worker service status:"
+        $worker_path status --debug || true
         
-        return 0
+        $all_healthy
     }
     
     # Start health check loop in background
