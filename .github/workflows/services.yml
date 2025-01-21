@@ -1,7 +1,7 @@
 services:
   - name: sshd
     command: /usr/sbin/sshd -D -f /etc/ssh/sshd_config -e
-    autostart: ${SERVICE_ENABLE_SSHD}
+    autostart: true
     autorestart: true
     user: root
     directory: /etc/ssh
@@ -12,7 +12,7 @@ services:
 
   - name: k8gate
     command: node /opt/sources/rabbitci/rabbit-ssh/bin/server.js
-    autostart: ${SERVICE_ENABLE_API}
+    autostart: true
     autorestart: true
     user: udx
     directory: /opt/sources/rabbitci/rabbit-ssh
@@ -24,7 +24,7 @@ services:
 
   - name: ssh_keys_sync
     command: node /opt/sources/rabbitci/rabbit-ssh/bin/controller.keys.js
-    autostart: ${SERVICE_ENABLE_SSHD}
+    autostart: true
     autorestart: true
     user: udx
     directory: /opt/sources/rabbitci/rabbit-ssh

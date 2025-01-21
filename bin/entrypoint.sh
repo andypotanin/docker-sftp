@@ -226,9 +226,6 @@ if [[ "${SERVICE_ENABLE_API}" == "true" ]]; then
         exit 1
     fi
 fi
-    
-    fi
-fi
 
 # Show final service status
 echo "Final service status:"
