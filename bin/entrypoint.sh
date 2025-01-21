@@ -110,16 +110,29 @@ cat /etc/supervisor/supervisord.conf
 echo "Services configuration:"
 cat /etc/supervisor/conf.d/services.conf
 
-# Start supervisord in foreground
+# Convert mounted services configuration
+echo "Converting services configuration..."
+if [ ! -f /etc/worker/services.yml ]; then
+    echo "Error: /etc/worker/services.yml not found"
+    exit 1
+fi
+
+/usr/local/bin/convert-services.js /etc/worker/services.yml /etc/supervisor/conf.d/services.conf
+echo "Generated supervisord configuration:"
+cat /etc/supervisor/conf.d/services.conf
+
+# Start supervisord
+echo "Starting supervisord..."
 /usr/bin/supervisord -n -c /etc/supervisor/supervisord.conf &
 SUPERVISOR_PID=$!
 
 # Wait for supervisord to be ready
-sleep 2
-
-# Start and verify services
-echo "Starting services..."
-supervisorctl status || { echo "Error: supervisord not responding"; exit 1; }
+echo "Waiting for supervisord to be ready..."
+timeout 30 bash -c 'until supervisorctl status >/dev/null 2>&1; do sleep 1; done' || {
+    echo "Error: supervisord failed to start"
+    cat /var/log/supervisor/supervisord.log
+    exit 1
+}
 
 if [[ "${SERVICE_ENABLE_SSHD}" == "true" ]]; then
     echo "Starting SSHD services..."
