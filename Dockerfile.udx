@@ -92,10 +92,18 @@ RUN chmod 755 /etc/ssh && \
 RUN mkdir -p /etc/supervisor/conf.d /var/log/supervisor /var/run /etc/worker && \
     chmod 755 /var/log/supervisor /var/run /etc/worker && \
     touch /var/run/supervisor.sock && \
-    chmod 700 /var/run/supervisor.sock
+    chmod 700 /var/run/supervisor.sock && \
+    chown -R root:root /etc/supervisor
 
+# Copy supervisord and services configuration
 COPY --chown=root:root static/etc/supervisor/supervisord.conf /etc/supervisor/supervisord.conf
 COPY --chown=root:root .github/workflows/services.yml /etc/worker/services.yml
+
+# Set correct permissions and verify files
+RUN chmod 644 /etc/supervisor/supervisord.conf /etc/worker/services.yml && \
+    ls -la /etc/supervisor/supervisord.conf /etc/worker/services.yml && \
+    echo "Verifying services.yml content:" && \
+    cat /etc/worker/services.yml
 
 # Set up services configuration and convert to supervisord format
 RUN npm install -g js-yaml && \

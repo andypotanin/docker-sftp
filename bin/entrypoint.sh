@@ -112,11 +112,18 @@ chown -R root:root /etc/supervisor/
 
 # Convert services configuration
 echo "Converting services configuration..."
-if [ ! -f /etc/worker/services.yml ]; then
+
+# Ensure directories exist
+mkdir -p /etc/worker /etc/supervisor/conf.d
+chmod 755 /etc/worker /etc/supervisor/conf.d
+
+# Verify services.yml exists
+if [ ! -f "/etc/worker/services.yml" ]; then
     echo "Error: /etc/worker/services.yml not found"
     ls -la /etc/worker/
     exit 1
 fi
+chmod 644 /etc/worker/services.yml
 
 echo "Services configuration input:"
 cat /etc/worker/services.yml
@@ -127,11 +134,20 @@ env | grep -E "SERVICE_|NODE_"
 echo "Node.js version: $(node --version)"
 echo "Script location: $(which convert-services.js)"
 
-# Ensure script is executable
+# Ensure script is executable and in the correct location
+cp bin/convert-services.js /usr/local/bin/
 chmod +x /usr/local/bin/convert-services.js
 
 echo "Converting services using Node.js directly..."
 node /usr/local/bin/convert-services.js /etc/worker/services.yml /etc/supervisor/conf.d/services.conf
+
+# Verify generated configuration
+echo "Generated supervisord configuration:"
+cat /etc/supervisor/conf.d/services.conf
+
+# Ensure correct permissions
+chown -R root:root /etc/supervisor/conf.d/
+chmod 644 /etc/supervisor/conf.d/services.conf
 CONVERT_EXIT=$?
 
 if [ $CONVERT_EXIT -ne 0 ]; then
