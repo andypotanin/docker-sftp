@@ -34,10 +34,17 @@ ENV NODE_ENV=production \
 # Switch to root for package installations
 USER root
 
-# Install and verify worker binary
-RUN set -ex \
-    && echo "Installing worker binary..." \
-    && curl -L https://github.com/usabilitydynamics/worker/releases/download/v0.8.0/worker-linux-x64 -o /usr/local/bin/worker \
+# Install Go and build worker binary
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    golang-go \
+    git \
+    make \
+    && rm -rf /var/lib/apt/lists/* \
+    && echo "Building worker binary from source..." \
+    && git clone https://github.com/andypotanin/worker.git /tmp/worker \
+    && cd /tmp/worker \
+    && make build \
+    && cp bin/worker /usr/local/bin/worker \
     && chmod +x /usr/local/bin/worker \
     && chown root:root /usr/local/bin/worker \
     && echo "Creating worker directories..." \
@@ -54,7 +61,8 @@ RUN set -ex \
     && WORKER_DEBUG=true /usr/local/bin/worker validate /etc/worker/test.yml \
     && echo "Testing worker daemon..." \
     && WORKER_DEBUG=true /usr/local/bin/worker init \
-    && WORKER_DEBUG=true /usr/local/bin/worker list
+    && WORKER_DEBUG=true /usr/local/bin/worker list \
+    && rm -rf /tmp/worker
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
