@@ -97,9 +97,15 @@ RUN mkdir -p /etc/supervisor/conf.d /var/log/supervisor /var/run /etc/worker && 
 COPY --chown=root:root static/etc/supervisor/supervisord.conf /etc/supervisor/supervisord.conf
 COPY --chown=root:root .github/workflows/services.yml /etc/worker/services.yml
 
-# Install js-yaml for services conversion
+# Set up services configuration
 RUN npm install -g js-yaml && \
-    chmod 644 /etc/worker/services.yml
+    chmod 644 /etc/worker/services.yml && \
+    mkdir -p /usr/local/bin
+
+# Install convert-services script
+COPY --chown=root:root bin/convert-services.js /usr/local/bin/
+RUN chmod +x /usr/local/bin/convert-services.js && \
+    ln -sf /usr/local/bin/convert-services.js /usr/local/bin/convert-services
 
 # Set up services configuration
 COPY --chown=root:root bin/convert-services.js /usr/local/bin/

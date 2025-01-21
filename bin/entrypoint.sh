@@ -126,7 +126,7 @@ echo "Services configuration input:"
 cat /etc/worker/services.yml
 
 echo "Converting services.yml to supervisord format..."
-node /usr/local/bin/convert-services.js /etc/worker/services.yml /etc/supervisor/conf.d/services.conf
+/usr/local/bin/convert-services /etc/worker/services.yml /etc/supervisor/conf.d/services.conf
 if [ $? -ne 0 ]; then
     echo "Error: Failed to convert services configuration"
     cat /usr/local/bin/convert-services.js
