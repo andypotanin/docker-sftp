@@ -6,13 +6,14 @@ FROM node:23.5-alpine
 LABEL maintainer="UDX Team <team@usabilitydynamics.com>" \
       org.opencontainers.image.source="https://github.com/usabilitydynamics/docker-sftp" \
       org.opencontainers.image.description="SFTP Gateway with Kubernetes Integration" \
-      org.opencontainers.image.licenses="MIT"
+      org.opencontainers.image.licenses="MIT" \
+      version="0.9.0"
 
 # Build arguments
 ARG KUBECTL_VERSION=v1.29.0
-ARG VERSION
+ARG VERSION=0.9.0
 
-# Install system dependencies
+# Install system dependencies in a single layer
 RUN apk add --no-cache \
     openssh \
     openssh-server \
@@ -22,9 +23,21 @@ RUN apk add --no-cache \
     bash \
     git \
     && pip3 install --no-cache-dir google-cloud-sdk \
-    && curl -LO "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl" \
+    && curl -LO "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/$(uname -m)/kubectl" \
     && chmod +x kubectl \
-    && mv kubectl /usr/local/bin/
+    && mv kubectl /usr/local/bin/ \
+    && mkdir -p \
+        /home/udx/.kube \
+        /etc/ssh \
+        /etc/ssh/authorized_keys.d \
+        /var/log \
+        /var/run/sshd \
+    && ssh-keygen -A \
+    && echo "PasswordAuthentication no" >> /etc/ssh/sshd_config \
+    && echo "ChallengeResponseAuthentication no" >> /etc/ssh/sshd_config \
+    && echo "PermitRootLogin no" >> /etc/ssh/sshd_config \
+    && adduser -D -h /home/udx -s /bin/bash udx \
+    && chown -R udx:udx /home/udx
 
 # Set environment variables
 ENV SERVICE_ENABLE_SSHD=true \
@@ -34,75 +47,22 @@ ENV SERVICE_ENABLE_SSHD=true \
     NODE_PORT=8080 \
     DEBUG=ssh*,sftp*,k8gate*
 
-# Switch to root for system setup
-USER root
-
-# Create required directories
-RUN mkdir -p \
-        /home/udx/.kube \
-        /etc/ssh \
-        /etc/ssh/authorized_keys.d \
-        /run/sshd \
-        /var/log \
-    # Set correct permissions
-    && chown -R udx:udx /home/udx \
-    && chmod 755 /etc/ssh \
-    && chmod 755 /etc/ssh/authorized_keys.d \
-    && chmod 755 /run/sshd \
-    && chown -R root:root /etc/ssh \
-    && chown -R udx:udx /var/log \
-    && chmod 777 /etc/ssh/authorized_keys.d
-
-# Set up SSH configuration
-COPY --chown=root:root static/etc/ssh/ /etc/ssh/
-RUN chmod 644 /etc/ssh/sshd_config \
-    && touch /var/log/sshd.log /var/log/auth.log /var/log/k8gate.log \
-    && chmod 644 /var/log/sshd.log /var/log/auth.log /var/log/k8gate.log \
-    && chown -R udx:udx /var/log \
-    # Generate SSH host keys with correct permissions
-    && rm -f /etc/ssh/ssh_host_* \
-    && ssh-keygen -A \
-    && chmod 600 /etc/ssh/ssh_host_*_key \
-    && chmod 644 /etc/ssh/ssh_host_*_key.pub \
-    && chown root:root /etc/ssh/ssh_host_*
-
-# Copy application files and configurations
+# Copy application files
 COPY --chown=udx:udx . /opt/sources/udx/k8gate/
-COPY --chown=udx:udx src/configs/worker.yml /home/udx/.cd/configs/worker.yml
-COPY --chown=udx:udx src/configs/services.yml /etc/worker/services.yml
-COPY --chown=root:root bin/entrypoint.sh bin/controller.ssh.entrypoint.sh /usr/local/bin/
-
-# Set up permissions for scripts and configs
-RUN chmod 755 /usr/local/bin/entrypoint.sh \
-    && chmod 755 /usr/local/bin/controller.ssh.entrypoint.sh \
-    && chmod +x /usr/local/bin/entrypoint.sh \
-    && chmod +x /usr/local/bin/controller.ssh.entrypoint.sh \
-    && chmod +x /opt/sources/udx/k8gate/bin/controller.keys.js \
-    && chmod +x /opt/sources/udx/k8gate/bin/server.js \
-    && chmod -R 755 /opt/sources/udx/k8gate/bin \
-    && chown -R udx:udx /opt/sources/udx/k8gate \
-    && touch /home/udx/.cd/configs/merged_worker.yml \
-    && chown udx:udx /home/udx/.cd/configs/merged_worker.yml \
-    && chmod 644 /home/udx/.cd/configs/merged_worker.yml
+WORKDIR /opt/sources/udx/k8gate
 
 # Install Node.js dependencies
-WORKDIR /opt/sources/udx/k8gate
-RUN npm config set cache /home/udx/.npm/_cacache \
-    && runuser -u udx -- npm ci --omit=dev \
-    && chown -R udx:udx node_modules
+RUN npm ci --only=production
 
-# Switch to root user for running entrypoint
-USER root
+# Switch to non-root user
+USER udx
 
-# Volume for SSH keys and logs
-VOLUME ["/etc/ssh/authorized_keys.d", "/var/log"]
+# Expose ports
+EXPOSE 22 8080
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD nc -z localhost 22 || exit 1
-
-# Expose ports
-EXPOSE 22 8080
 
 # Set entrypoint and default command
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
