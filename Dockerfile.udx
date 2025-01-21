@@ -34,12 +34,11 @@ ENV NODE_ENV=production \
 # Switch to root for package installations
 USER root
 
-# Install supervisord for service management
+# Install and configure supervisord
 RUN apt-get update && apt-get install -y --no-install-recommends \
     supervisor \
     && rm -rf /var/lib/apt/lists/* \
-    && mkdir -p /etc/supervisor/conf.d /var/log/supervisor \
-    && echo "[supervisord]\nnodaemon=true\nuser=root\n\n[program:sshd]\ncommand=/usr/sbin/sshd -D -f /etc/ssh/sshd_config -e\nautostart=true\nautorestart=true\nstdout_logfile=/var/log/sshd.log\nstderr_logfile=/var/log/sshd.log\nenvironment=DEBUG=\"ssh:*,auth:*\",HOME=\"/root\"\n\n[program:k8gate]\ncommand=node /opt/sources/rabbitci/rabbit-ssh/bin/server.js\nautostart=true\nautorestart=true\nuser=udx\ndirectory=/opt/sources/rabbitci/rabbit-ssh\nstdout_logfile=/var/log/k8gate.log\nstderr_logfile=/var/log/k8gate.log\nenvironment=DEBUG=\"k8gate:*,api:*,auth:*,ssh:*\",NODE_ENV=\"production\",PORT=\"8080\",NODE_PORT=\"8080\",HOME=\"/home/udx\"\n\n[program:ssh_keys_sync]\ncommand=node /opt/sources/rabbitci/rabbit-ssh/bin/controller.keys.js\nautostart=true\nautorestart=true\nuser=udx\ndirectory=/opt/sources/rabbitci/rabbit-ssh\nstdout_logfile=/var/log/ssh-keys-sync.log\nstderr_logfile=/var/log/ssh-keys-sync.log\nenvironment=DEBUG=\"ssh:keys:*,auth:*\",DIRECTORY_KEYS_BASE=\"/etc/ssh/authorized_keys.d\",PASSWORD_FILE=\"/etc/passwd\",PASSWORDS_TEMPLATE=\"alpine.passwords\",HOME=\"/home/udx\"" > /etc/supervisor/conf.d/services.conf
+    && mkdir -p /etc/supervisor/conf.d /var/log/supervisor
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -95,7 +94,10 @@ COPY --chown=root:root static/etc/supervisor/services.conf /etc/supervisor/conf.
 RUN mkdir -p /var/log/supervisor /var/run && \
     chmod 755 /var/log/supervisor /var/run && \
     touch /var/run/supervisor.sock && \
-    chmod 700 /var/run/supervisor.sock
+    chmod 700 /var/run/supervisor.sock && \
+    chown -R root:root /etc/supervisor && \
+    chmod 644 /etc/supervisor/supervisord.conf && \
+    chmod 644 /etc/supervisor/conf.d/services.conf
 
 # Fix SSH config and logging permissions
 RUN chmod 644 /etc/ssh/sshd_config && \
