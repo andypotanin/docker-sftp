@@ -88,15 +88,18 @@ RUN chmod 755 /etc/ssh && \
     chown -R udx:udx /opt/sources/rabbitci && \
     chown -R udx:udx /var/log && \
     chmod 777 /etc/ssh/authorized_keys.d
-# Configure supervisord
-RUN mkdir -p /etc/supervisor/conf.d /var/log/supervisor /var/run && \
-    chmod 755 /var/log/supervisor /var/run && \
+# Configure supervisord and services
+RUN mkdir -p /etc/supervisor/conf.d /var/log/supervisor /var/run /etc/worker && \
+    chmod 755 /var/log/supervisor /var/run /etc/worker && \
     touch /var/run/supervisor.sock && \
     chmod 700 /var/run/supervisor.sock
 
 COPY --chown=root:root static/etc/supervisor/supervisord.conf /etc/supervisor/supervisord.conf
+COPY --chown=root:root .github/workflows/services.yml /etc/worker/services.yml
+
 # Install js-yaml for services conversion
-RUN npm install -g js-yaml
+RUN npm install -g js-yaml && \
+    chmod 644 /etc/worker/services.yml
 
 # Set up services configuration
 COPY --chown=root:root bin/convert-services.js /usr/local/bin/
