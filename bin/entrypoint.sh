@@ -1,26 +1,6 @@
 #!/bin/bash
 set -e
 
-cat << "EOF"
-                   ╭───────────────────╮
-                  ╱ ⋆             ⋆     ╲
-                 ╱    ▄▄▄▄▄▄▄▄▄▄▄▄      ╲
-                ╱   ▄█████████████▄      ╲
-               ╱   ████▀▀▀▀▀▀▀████       ╲
-              ╱    ███  ▄▄▄▄  ███        ╲
-             |     ███  ████  ███         |
-             |   ▐███   ★     ███▌       |
-             |    ▀██▄  K8GATE ▄██▀       |
-             |      ▀█▄      ▄█▀         |
-             |        ▀ SILENT ▀          |
-             |     ▄▄▄  ★★★  ▄▄▄        |
-             |    ▀▀█▀▀ DEADLY ▀▀█▀▀     |
-             |       ▀▀▀▀▀▀▀▀▀▀▀         |
-              ╲                        ╱
-               ╲  ⋆              ⋆    ╱
-                ╰───────────────────╯
-EOF
-
 echo "Starting SFTP Gateway container..."
 
 # Function to safely create/modify files as root
