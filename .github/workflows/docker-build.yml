@@ -8,7 +8,7 @@ on:
 
 env:
   REGISTRY: docker.io
-  IMAGE_NAME: usabilitydynamics/udx-sftp
+  IMAGE_NAME: usabilitydynamics/k8-container-gate
   PLATFORMS: linux/amd64,linux/arm64
 
 jobs:

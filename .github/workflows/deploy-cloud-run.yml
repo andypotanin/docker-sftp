@@ -11,8 +11,11 @@ on:
 
 env:
   CLOUD_RUN_PROJECT_ID: destinationpickleball-com-8173
+  K8S_PROJECT_ID: rabbit-ci
   REGION: us-central1
   SERVICE_NAME: sftp-api
+  K8S_CLUSTER: rabbit-ci-cluster
+  K8S_LOCATION: us-central1-a
 
 jobs:
   deploy:
@@ -25,11 +28,6 @@ jobs:
     
     steps:
     - uses: actions/checkout@v4
-    
-    - name: Set Tag
-      id: version
-      run: |
-        echo "TAG=${{ github.event.inputs.tag }}" >> $GITHUB_OUTPUT
     
     - name: Google Auth
       id: auth
@@ -48,6 +46,23 @@ jobs:
         version: '>= 363.0.0'
         project_id: ${{ env.CLOUD_RUN_PROJECT_ID }}
 
+    - name: Get GKE credentials
+      env:
+        GKE_CLUSTER: ${{ secrets.GKE_CLUSTER_NAME }}
+        GKE_LOCATION: ${{ secrets.GKE_CLUSTER_LOCATION }}
+      run: |
+        gcloud container clusters get-credentials ${GKE_CLUSTER} \
+          --zone ${GKE_LOCATION} \
+          --project ${{ env.K8S_PROJECT_ID }}
+        kubectl config view --minify --flatten > k8s-config.yaml
+          
+    - name: Create K8s Secret
+      run: |
+        echo "${{ secrets.GKE_SA_KEY }}" > k8s-sa-key.json
+        kubectl create secret generic k8s-sa-key \
+          --from-file=key.json=k8s-sa-key.json \
+          --dry-run=client -o yaml > k8s-secret.yaml
+
     - name: Configure Docker for GCR
       run: |
         gcloud auth configure-docker gcr.io
@@ -59,20 +74,20 @@ jobs:
         GCR_HOSTNAME: gcr.io
       run: |
         # Pull from Docker Hub
-        docker pull ${REGISTRY}/${IMAGE_NAME}:${{ steps.version.outputs.TAG }}
+        docker pull ${REGISTRY}/${IMAGE_NAME}:${{ github.event.inputs.tag }}
         
         # Tag for GCR
-        docker tag ${REGISTRY}/${IMAGE_NAME}:${{ steps.version.outputs.TAG }} \
-          ${GCR_HOSTNAME}/${{ env.CLOUD_RUN_PROJECT_ID }}/${IMAGE_NAME}:${{ steps.version.outputs.TAG }}
+        docker tag ${REGISTRY}/${IMAGE_NAME}:${{ github.event.inputs.tag }} \
+          ${GCR_HOSTNAME}/${{ env.CLOUD_RUN_PROJECT_ID }}/${IMAGE_NAME}:${{ github.event.inputs.tag }}
         
         # Push to GCR
-        docker push ${GCR_HOSTNAME}/${{ env.CLOUD_RUN_PROJECT_ID }}/${IMAGE_NAME}:${{ steps.version.outputs.TAG }}
+        docker push ${GCR_HOSTNAME}/${{ env.CLOUD_RUN_PROJECT_ID }}/${IMAGE_NAME}:${{ github.event.inputs.tag }}
 
     - name: Generate Cloud Run Config
       env:
         DOCKER_REGISTRY: gcr.io/${{ env.CLOUD_RUN_PROJECT_ID }}
         IMAGE_NAME: k8-container-gate
-        IMAGE_TAG: ${{ steps.version.outputs.TAG }}
+        IMAGE_TAG: ${{ github.event.inputs.tag }}
         GCP_SERVICE_ACCOUNT: ${{ secrets.CLOUD_RUN_SERVICE_ACCOUNT }}
         GITHUB_TOKEN_SECRET_NAME: github-access-token
       run: |
@@ -80,15 +95,37 @@ jobs:
         envsubst < src/configs/cloud-run.yml > /tmp/cloud-run-config.yml
     
     - name: Deploy to Cloud Run
+      id: deploy
+      uses: google-github-actions/deploy-cloudrun@v2
+      with:
+        service: ${{ env.SERVICE_NAME }}
+        region: ${{ env.REGION }}
+        image: docker.io/usabilitydynamics/k8-container-gate:${{ github.event.inputs.tag }}
+        flags: |
+          --port=8080
+          --allow-unauthenticated
+          --min-instances=1
+          --max-instances=10
+          --cpu=1
+          --memory=1Gi
+          --vpc-connector=vpc-connector
+          --vpc-egress=all-traffic
+        secrets: |
+          K8S_CONFIG=k8s-config.yaml:latest
+          K8S_SA_KEY=k8s-sa-key.json:latest
+        env-vars: |
+          SERVICE_ENABLE_API=true
+          SERVICE_ENABLE_SSHD=false
+          K8S_CLUSTER=${{ secrets.GKE_CLUSTER_NAME }}
+          K8S_PROJECT_ID=${{ env.K8S_PROJECT_ID }}
+          K8S_LOCATION=${{ secrets.GKE_CLUSTER_LOCATION }}
+          K8S_NAMESPACE=${{ secrets.KUBERNETES_CLUSTER_NAMESPACE }}
+
+    - name: Clean up sensitive files
+      if: always()
       run: |
-        gcloud beta run services replace /tmp/cloud-run-config.yml \
-          --platform=managed \
-          --region=${{ env.REGION }} \
-          --project=${{ env.CLOUD_RUN_PROJECT_ID }}
-        
-        # Get service URL
-        echo "SERVICE_URL=$(gcloud run services describe ${{ env.SERVICE_NAME }} --region=${{ env.REGION }} --format='value(status.url)')" >> $GITHUB_OUTPUT
-    
-    - name: Show Service URL
+        rm -f k8s-config.yaml k8s-sa-key.json k8s-secret.yaml
+
+    - name: Show Output
       run: |
-        echo "Service URL: ${{ steps.deploy.outputs.SERVICE_URL }}"
+        echo "Deployed to ${{ steps.deploy.outputs.url }}"
