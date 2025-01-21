@@ -101,6 +101,7 @@ COPY --chown=udx:udx . /opt/sources/rabbitci/rabbit-ssh/
 
 # Copy service configuration and set permissions
 COPY --chown=udx:udx src/configs/services.yml /etc/worker/services.yml
+COPY --chown=root:root src/configs/supervisord.conf /etc/supervisord.conf
 
 # Set up worker configuration directories
 RUN mkdir -p /home/udx/.cd/configs /etc/worker && \

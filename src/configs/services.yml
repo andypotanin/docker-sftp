@@ -1,13 +1,24 @@
 ---
-kind: Service
-version: v1
+kind: workerService
+version: udx.io/worker-v1/service
 services:
   - name: sshd
     command: /usr/sbin/sshd -D -f /etc/ssh/sshd_config -e
     autostart: ${SERVICE_ENABLE_SSHD}
+    autorestart: true
+    user: root
+    envs:
+      - DEBUG=ssh:*,auth:*
+      - HOME=/root
+    healthcheck:
+      tcp:
+        port: 22
+        interval: 10s
+        timeout: 3s
+        retries: 2
     
   - name: k8gate
-    command: node /opt/sources/rabbitci/rabbit-ssh/bin/server.js 2>&1 | tee -a /var/log/k8gate.log
+    command: node /opt/sources/rabbitci/rabbit-ssh/bin/server.js
     autostart: ${SERVICE_ENABLE_API}
     autorestart: true
     user: udx
@@ -29,7 +40,7 @@ services:
         retries: 2
     
   - name: ssh-keys-sync
-    command: node /opt/sources/rabbitci/rabbit-ssh/bin/controller.keys.js 2>&1 | tee -a /var/log/ssh-keys-sync.log
+    command: node /opt/sources/rabbitci/rabbit-ssh/bin/controller.keys.js
     autostart: ${SERVICE_ENABLE_SSHD}
     autorestart: true
     user: udx
@@ -42,6 +53,6 @@ services:
       - HOME=/home/udx
     depends_on:
       - sshd
-    interval: 300  # Run every 5 minutes
-    max_restarts: 0  # No limit on restarts
-    restart_delay: 10000  # Wait 10s between restarts
+    interval: 300
+    max_restarts: 0
+    restart_delay: 10000
