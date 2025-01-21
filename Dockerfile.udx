@@ -34,26 +34,27 @@ ENV NODE_ENV=production \
 # Switch to root for package installations
 USER root
 
-# Install worker binary first
-RUN curl -L https://github.com/usabilitydynamics/worker/releases/download/v0.8.0/worker-linux-x64 -o /usr/local/bin/worker \
+# Install and verify worker binary
+RUN set -ex \
+    && echo "Installing worker binary..." \
+    && curl -L https://github.com/usabilitydynamics/worker/releases/download/v0.8.0/worker-linux-x64 -o /usr/local/bin/worker \
     && chmod +x /usr/local/bin/worker \
+    && chown root:root /usr/local/bin/worker \
+    && echo "Creating worker directories..." \
+    && mkdir -p /etc/worker/{configs,logs} \
+    && chmod 755 /etc/worker /etc/worker/configs /etc/worker/logs \
+    && chown -R root:root /etc/worker \
     && echo "Testing worker binary..." \
     && /usr/local/bin/worker --version \
-    && mkdir -p /etc/worker /etc/worker/configs /var/log/worker \
-    && chown -R root:root /usr/local/bin/worker \
-    && chmod 755 /usr/local/bin/worker \
-    && chown -R udx:udx /var/log/worker \
-    && chmod -R 755 /var/log/worker \
-    && echo "Verifying worker installation..." \
-    && which worker \
-    && worker --version \
     && echo "Creating test configuration..." \
-    && echo 'version: "1.0"\nkind: "worker"\nservices:\n  - name: test\n    command: "echo test"\n    autostart: true' > /etc/worker/test.yml \
+    && echo 'version: "1.0"\nkind: "worker"\n\nservices:\n  - name: test\n    command: "echo test"\n    autostart: true' > /etc/worker/test.yml \
+    && echo "Test configuration contents:" \
+    && cat /etc/worker/test.yml \
     && echo "Validating test configuration..." \
-    && worker validate /etc/worker/test.yml \
+    && WORKER_DEBUG=true /usr/local/bin/worker validate /etc/worker/test.yml \
     && echo "Testing worker daemon..." \
-    && worker init \
-    && worker list
+    && WORKER_DEBUG=true /usr/local/bin/worker init \
+    && WORKER_DEBUG=true /usr/local/bin/worker list
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -133,23 +134,29 @@ ENV PATH $PATH:/usr/local/google-cloud-sdk/bin
 # Copy application files
 COPY --chown=udx:udx . /opt/sources/rabbitci/rabbit-ssh/
 
-# Install worker binary and set up configuration
-RUN set -ex && \
-    # Download and verify worker binary
-    curl -L -o /usr/local/bin/worker https://github.com/usabilitydynamics/worker/releases/download/v0.8.0/worker-linux-x64 && \
-    chmod +x /usr/local/bin/worker && \
-    echo "Verifying worker binary installation..." && \
-    /usr/local/bin/worker --version && \
-    # Set up worker directories with proper permissions
-    mkdir -p /etc/worker/{logs,configs} && \
-    chown -R root:root /etc/worker && \
-    chmod 755 /etc/worker /etc/worker/logs /etc/worker/configs && \
-    # Verify worker binary is in PATH and executable
-    which worker && \
-    ls -l /usr/local/bin/worker && \
-    # Create test configuration to verify worker functionality
-    echo "version: \"1.0\"\nkind: \"worker\"\n\nservices:\n  - name: test\n    command: echo test" > /etc/worker/test.yml && \
-    WORKER_DEBUG=true /usr/local/bin/worker validate /etc/worker/test.yml
+# Copy and validate services configuration
+COPY --chown=root:root .github/workflows/services.yml /etc/worker/services.yml
+RUN set -ex \
+    && echo "Setting up worker directories and log files..." \
+    && mkdir -p /etc/worker/{configs,logs} /var/log/worker \
+    && touch /var/log/{sshd,k8gate,ssh-keys-sync,auth}.log \
+    && chown -R udx:udx /var/log/{worker,sshd.log,k8gate.log,ssh-keys-sync.log,auth.log} \
+    && chmod 755 /etc/worker /etc/worker/configs /etc/worker/logs /var/log/worker \
+    && chmod 644 /var/log/{sshd,k8gate,ssh-keys-sync,auth}.log \
+    && echo "Verifying services configuration..." \
+    && echo "Worker binary version: $(/usr/local/bin/worker --version)" \
+    && echo "Configuration contents:" \
+    && cat /etc/worker/services.yml \
+    && echo "Validating services configuration..." \
+    && WORKER_DEBUG=true DEBUG=worker:*,ssh:*,k8gate:* /usr/local/bin/worker validate /etc/worker/services.yml \
+    && echo "Setting up service configuration..." \
+    && cp /etc/worker/services.yml /etc/worker/configs/services.yml \
+    && chmod 644 /etc/worker/services.yml /etc/worker/configs/services.yml \
+    && chown root:root /etc/worker/services.yml /etc/worker/configs/services.yml \
+    && echo "Testing worker initialization..." \
+    && WORKER_DEBUG=true /usr/local/bin/worker init \
+    && WORKER_DEBUG=true /usr/local/bin/worker list \
+    && echo "Worker configuration validated successfully"
 
 # Copy and verify service configuration
 COPY --chown=root:root .github/workflows/services.yml /etc/worker/services.yml

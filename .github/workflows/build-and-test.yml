@@ -73,14 +73,19 @@ jobs:
         # Set up worker configuration with proper permissions
         echo "Setting up worker configuration..."
         sudo rm -rf /etc/worker
-        sudo mkdir -p /etc/worker/configs
-        sudo cp src/configs/services.yml /etc/worker/services.yml
-        sudo cp src/configs/services.yml /etc/worker/configs/services.yml
-        sudo chmod 755 /etc/worker
-        sudo chmod 755 /etc/worker/configs
-        sudo chmod 644 /etc/worker/services.yml
-        sudo chmod 644 /etc/worker/configs/services.yml
+        sudo mkdir -p /etc/worker/{configs,logs}
+        sudo cp .github/workflows/services.yml /etc/worker/services.yml
+        sudo cp .github/workflows/services.yml /etc/worker/configs/services.yml
+        sudo chmod 755 /etc/worker /etc/worker/configs /etc/worker/logs
+        sudo chmod 644 /etc/worker/services.yml /etc/worker/configs/services.yml
         sudo chown -R root:root /etc/worker
+        
+        echo "Worker configuration contents:"
+        cat /etc/worker/services.yml
+        
+        echo "Worker directory structure:"
+        ls -la /etc/worker/
+        ls -la /etc/worker/configs/
         
         echo "Worker configuration contents and permissions:"
         ls -la /etc/worker/
@@ -122,6 +127,9 @@ jobs:
           -e SERVICE_ENABLE_API=true \
           -e DEBUG=k8gate:*,api:*,auth:*,ssh:*,worker:* \
           -e SERVICE_ENABLE_K8S=false \
+          -e WORKER_DEBUG=true \
+          -e WORKER_CONFIG_DIR=/etc/worker \
+          -e WORKER_CONFIG_FILE=/etc/worker/services.yml \
           -v /etc/worker:/etc/worker:ro \
           -e ACCESS_TOKEN=${ACCESS_TOKEN} \
           -e KUBERNETES_CLUSTER_ENDPOINT=${KUBERNETES_CLUSTER_ENDPOINT} \
@@ -137,10 +145,8 @@ jobs:
           -e PASSWORD_FILE=/etc/passwd \
           -e PASSWORDS_TEMPLATE=alpine.passwords \
           -e STATE_PROVIDER=local \
-          -e WORKER_DEBUG=true \
-          -e WORKER_CONFIG_DIR=/etc/worker \
-          -e WORKER_CONFIG_FILE=/etc/worker/services.yml \
           -v /etc/ssh/authorized_keys.d:/etc/ssh/authorized_keys.d:ro \
+          -v /var/log:/var/log \
           -p 2222:22 \
           -p 8080:8080 \
           sftp-gateway:${{ steps.version.outputs.TAG }}
