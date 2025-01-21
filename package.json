@@ -20,6 +20,7 @@
         "url": "git+https://github.com/udx/docker-sftp.git"
     },
     "dependencies": {
+        "js-yaml": "^4.1.0",
         "async": "^3.2.5",
         "axios": "^1.6.5",
         "chokidar": "^3.5.3",

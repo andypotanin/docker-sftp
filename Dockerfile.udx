@@ -95,9 +95,17 @@ RUN mkdir -p /etc/supervisor/conf.d /var/log/supervisor /var/run && \
     chmod 700 /var/run/supervisor.sock
 
 COPY --chown=root:root static/etc/supervisor/supervisord.conf /etc/supervisor/supervisord.conf
-COPY --chown=root:root static/etc/supervisor/services.conf /etc/supervisor/conf.d/services.conf
+COPY --chown=root:root .github/workflows/services.yml /tmp/services.yml
 
-RUN chown -R root:root /etc/supervisor && \
+# Install js-yaml for services conversion
+RUN npm install -g js-yaml
+
+# Convert services.yml to supervisord format
+COPY --chown=root:root bin/convert-services.js /usr/local/bin/
+RUN chmod +x /usr/local/bin/convert-services.js && \
+    /usr/local/bin/convert-services.js /tmp/services.yml /etc/supervisor/conf.d/services.conf && \
+    rm /tmp/services.yml && \
+    chown -R root:root /etc/supervisor && \
     chmod 644 /etc/supervisor/supervisord.conf && \
     chmod 644 /etc/supervisor/conf.d/services.conf && \
     supervisord -c /etc/supervisor/supervisord.conf -t
