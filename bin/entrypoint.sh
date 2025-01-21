@@ -79,8 +79,10 @@ export DEBUG=ssh*,sftp*,k8gate*,express*
 export NODE_ENV=production
 export NODE_PORT=8080
 
-# Start services using supervisord
-echo "Starting services using supervisord..."
+# Set up environment variables
+export SERVICE_ENABLE_SSHD=${SERVICE_ENABLE_SSHD:-true}
+export SERVICE_ENABLE_API=${SERVICE_ENABLE_API:-true}
+export NODE_ENV=${NODE_ENV:-production}
 
 # Function to check service health
 check_service_health() {
@@ -106,6 +108,7 @@ check_service_health() {
 # Create required directories
 mkdir -p /var/run/supervisor /var/log/supervisor /etc/supervisor/conf.d
 chmod 755 /var/run/supervisor /var/log/supervisor /etc/supervisor/conf.d
+chown -R root:root /etc/supervisor/
 
 # Convert services configuration
 echo "Converting services configuration..."
@@ -119,22 +122,18 @@ echo "Services configuration input:"
 cat /etc/worker/services.yml
 
 echo "Converting services.yml to supervisord format..."
+echo "Environment variables:"
+env | grep -E "SERVICE_|NODE_"
 echo "Node.js version: $(node --version)"
 echo "Script location: $(which convert-services.js)"
-echo "Script permissions:"
-ls -l /usr/local/bin/convert-services.js
 
 # Ensure script is executable
 chmod +x /usr/local/bin/convert-services.js
-
-echo "Services.yml content:"
-cat /etc/worker/services.yml
 
 echo "Converting services using Node.js directly..."
 node /usr/local/bin/convert-services.js /etc/worker/services.yml /etc/supervisor/conf.d/services.conf
 CONVERT_EXIT=$?
 
-echo "Convert script exit code: $CONVERT_EXIT"
 if [ $CONVERT_EXIT -ne 0 ]; then
     echo "Error: Failed to convert services configuration"
     echo "Script content:"
@@ -149,9 +148,6 @@ fi
 echo "Generated supervisord configuration:"
 cat /etc/supervisor/conf.d/services.conf
 
-echo "Generated supervisord configuration:"
-cat /etc/supervisor/conf.d/services.conf
-
 # Verify supervisord configuration
 echo "Verifying supervisord configuration..."
 supervisord -c /etc/supervisor/supervisord.conf -t
@@ -159,10 +155,6 @@ if [ $? -ne 0 ]; then
     echo "Error: Invalid supervisord configuration"
     exit 1
 fi
-
-# Export service control variables with defaults
-export SERVICE_ENABLE_SSHD=${SERVICE_ENABLE_SSHD:-true}
-export SERVICE_ENABLE_API=${SERVICE_ENABLE_API:-true}
 
 # Start supervisord
 echo "Starting supervisord..."

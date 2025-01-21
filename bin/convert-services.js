@@ -84,8 +84,23 @@ async function main() {
             process.exit(1);
         }
         
+        console.log('Reading services configuration from:', servicesPath);
         const yamlContent = fs.readFileSync(servicesPath, 'utf8');
-        const services = yaml.load(yamlContent).services;
+        console.log('YAML content:', yamlContent);
+
+        const parsedYaml = yaml.load(yamlContent);
+        console.log('Parsed YAML:', JSON.stringify(parsedYaml, null, 2));
+
+        if (!parsedYaml || !parsedYaml.services || !Array.isArray(parsedYaml.services)) {
+            throw new Error('Invalid services.yml: missing or invalid services array');
+        }
+
+        if (parsedYaml.services.length === 0) {
+            throw new Error('No services defined in services.yml');
+        }
+
+        const services = parsedYaml.services;
+        console.log('Found services:', services.map(s => s.name).join(', '));
         
         const supervisordConfig = convertToSupervisorConfig(services);
         
