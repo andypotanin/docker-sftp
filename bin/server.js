@@ -38,7 +38,6 @@ const utility = require('../lib/utility');
 const md5 = require('md5');
 const rateLimit = require('../lib/rate-limit');
 const events = require('../lib/events');
-const normalizeMessage = require('../lib/normalize-message');
 
 // Uncaught exception handler
 process.on('uncaughtException', (err) => {
