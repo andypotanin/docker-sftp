@@ -13,106 +13,70 @@
  * - PASSWORD_FILE: System password file (/etc/passwd)
  * - PASSWORDS_TEMPLATE: Template for password generation (alpine.passwords)
  * - CONTROLLER_KEYS_PATH: Optional state file path (/var/lib/rabbit-ssh/state.json)
- * 
- * Usage:
- * Production (Kubernetes):
- *   DIRECTORY_KEYS_BASE=/etc/ssh/authorized_keys.d \
- *   PASSWORD_FILE=/etc/passwd \
- *   PASSWORDS_TEMPLATE=alpine.passwords \
- *   controller.keys
- *
- * Need to trigger when a docker "application" is launched and when a user changes their GitHub keys.
- *
- * 1. Get list of running Docker applications, extract the GitHub "id" of each application.
- * 2. Fetch GitHub "collaborators" for each of the application, record them in an object, using only those permissions.push permission.
- * 3. Fetch all public GitHub keys for each "collaborator"
- * 4. Generate /etc/passwd and /etc/ssh/authorized_keys.d/{APP} for each application/user.
- *
- *
- * For Production on Kubernetes rabbit-ssh VM:
- *    DIRECTORY_KEYS_BASE=/etc/ssh/authorized_keys.d PASSWORD_FILE=/etc/passwd PASSWORDS_TEMPLATE=alpine.passwords controller.keys
- *
- * For Production on Kubernetes rabbit-ssh VM (write to state.json):
- *    CONTROLLER_KEYS_PATH=/var/lib/rabbit-ssh/state.json DIRECTORY_KEYS_BASE=/etc/ssh/authorized_keys.d PASSWORD_FILE=/etc/passwd PASSWORDS_TEMPLATE=alpine.passwords opt/controller.keys.js
- *
- *
  */
-const { KeyManagementService } = require('../src');
-const debug = require('debug')('update-ssh');
 
+const axios = require('axios');
+const async = require('async');
+const Mustache = require('mustache');
+const fs = require('fs');
+const debug = require('debug')('update-ssh');
+const _ = require('lodash');
+const utility = require('../lib/utility');
+const { KeyManagementService } = require('../src');
+
+// Environment variables with defaults
+const allowedRoles = process.env.ALLOW_SSH_ACCESS_ROLES || 'admin,maintain,write';
+const productionBranch = process.env.PRODUCTION_BRANCH || 'production';
+const allowedRolesForProd = process.env.ALLOW_SSH_ACCES_PROD_ROLES || 'admin';
+
+/**
+ * Update SSH keys and user accounts
+ * @param {Object} options Configuration options
+ * @param {string} options.keysPath Base directory for SSH keys
+ * @param {string} options.passwordFile Path to password file
+ * @param {string} options.passwordTemplate Template for password file
+ * @param {string} options.accessToken GitHub access token
+ * @param {Function} taskCallback Callback function
+ */
 module.exports.updateKeys = async function updateKeys(options, taskCallback) {
-    const keyManager = new KeyManagementService({
-        keysPath: options.keysPath || process.env.DIRECTORY_KEYS_BASE || '/etc/ssh/authorized_keys.d',
-        passwordFile: options.passwordFile || process.env.PASSWORD_FILE || '/etc/passwd',
-        passwordTemplate: options.passwordTemplate || process.env.PASSWORDS_TEMPLATE || 'alpine.passwords',
-        accessToken: options.accessToken || process.env.ACCESS_TOKEN,
-        stateProvider: process.env.STATE_PROVIDER || 'kubernetes',
-        kubernetesConfig: {
-            endpoint: process.env.KUBERNETES_CLUSTER_ENDPOINT,
-            namespace: process.env.KUBERNETES_CLUSTER_NAMESPACE,
-            token: process.env.KUBERNETES_CLUSTER_USER_TOKEN
+    // Set default callback if not provided
+    taskCallback = typeof taskCallback === 'function' ? taskCallback : async () => {
+        if (process.env.SLACK_NOTIFICACTION_URL?.startsWith('https')) {
+            try {
+                await axios.post(process.env.SLACK_NOTIFICACTION_URL, {
+                    channel: process.env.SLACK_NOTIFICACTION_CHANNEL,
+                    username: 'SSH/Server',
+                    text: `SSH Keys refreshed on ${process.env.HOSTNAME || process.env.HOST} has finished. \`\`\`kubectl -n ${process.env.KUBERNETES_CLUSTER_NAMESPACE} exec -it ${process.env.HOSTNAME || process.env.HOST} sh\`\`\``
+                });
+            } catch (err) {
+                debug('Failed to send Slack notification:', err.message);
+            }
+        } else {
+            debug('SLACK_NOTIFICACTION_URL not set or invalid');
         }
-    });
+    };
 
     try {
+        const keyManager = new KeyManagementService({
+            keysPath: options.keysPath || process.env.DIRECTORY_KEYS_BASE || '/etc/ssh/authorized_keys.d',
+            passwordFile: options.passwordFile || process.env.PASSWORD_FILE || '/etc/passwd',
+            passwordTemplate: options.passwordTemplate || process.env.PASSWORDS_TEMPLATE || 'alpine.passwords',
+            accessToken: options.accessToken || process.env.ACCESS_TOKEN,
+            stateProvider: process.env.STATE_PROVIDER || 'kubernetes',
+            kubernetesConfig: {
+                endpoint: process.env.KUBERNETES_CLUSTER_ENDPOINT,
+                namespace: process.env.KUBERNETES_CLUSTER_NAMESPACE,
+                token: process.env.KUBERNETES_CLUSTER_USER_TOKEN
+            }
+        });
+
         const result = await keyManager.updateKeys();
-        if (typeof taskCallback === 'function') {
-            taskCallback(null, result);
-        }
+        taskCallback(null, result);
         return result;
     } catch (err) {
         debug('Failed to update keys:', err);
-        if (typeof taskCallback === 'function') {
-            taskCallback(err);
-        }
+        taskCallback(err);
         throw err;
-    }
-
-    taskCallback = 'function' === typeof taskCallback ? taskCallback : function taskCallback() {
-
-        if (process.env.SLACK_NOTIFICACTION_URL && process.env.SLACK_NOTIFICACTION_URL.indexOf('https') === 0) {
-            axios({
-                method: 'post',
-                url: process.env.SLACK_NOTIFICACTION_URL,
-                data: {
-                    channel: process.env.SLACK_NOTIFICACTION_CHANNEL,
-                    username: 'SSH/Server',
-                    text: 'SSH Keys refreshed on ' + (process.env.HOSTNAME || process.env.HOST) + ' has finished. ```kubectl -n ' + process.env.KUBERNETES_CLUSTER_NAMESPACE + ' exec -it ' + (process.env.HOSTNAME || process.env.HOST) + ' sh```'
-                }
-            });
-
-        } else {
-            console.log('process.env.SLACK_NOTIFICACTION_URL isn\'t set');
-        }
-
-    };
-
-    options = _.defaults(options, {
-        statePath: process.env.CONTROLLER_KEYS_PATH || null,
-        keysPath: process.env.DIRECTORY_KEYS_BASE || '/etc/ssh/authorized_keys.d',
-        passwordFile: process.env.PASSWORD_FILE || '/etc/passwd',
-        passwordTemplate: process.env.PASSWORDS_TEMPLATE || 'alpine.passwords',
-        passwordPath: process.env.PASSWORDS_PATH || '/opt/sources/rabbitci/rabbit-ssh/static/templates/'
-    });
-
-    if (!options.accessToken) {
-        return taskCallback(new Error('Missing [accessToken].'));
-    }
-
-    // check that target key directory exists
-    if (!fs.existsSync(options.keysPath)) {
-        console.error('authorized_keys [%s] directory missing.', options.keysPath);
-        return;
-    }
-
-    if (!options.passwordFile) {
-        console.error('the PASSWORD_FILE is not explicitly set.');
-        return;
-    }
-
-    if (!options.passwordTemplate) {
-        console.error('the PASSWORDS_TEMPLATE is not explicitly set.');
-        return;
     }
 
     var _applications = {}; // application to GitHub users

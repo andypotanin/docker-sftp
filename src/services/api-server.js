@@ -4,6 +4,7 @@ const _ = require('lodash');
 const debug = require('debug')('k8gate:server');
 const md5 = require('md5');
 const events = require('../utils/events');
+const https = require('https');
 
 /**
  * API Server Service
@@ -195,7 +196,7 @@ class ApiServer {
      * @private
      */
     async notifyStartup() {
-        if (process.env.SLACK_NOTIFICACTION_URL?.startsWith('https')) {
+        if (process.env.SLACK_NOTIFICACTION_URL && process.env.SLACK_NOTIFICACTION_URL.startsWith('https')) {
             try {
                 await axios.post(process.env.SLACK_NOTIFICACTION_URL, {
                     channel: process.env.SLACK_NOTIFICACTION_CHANNEL,

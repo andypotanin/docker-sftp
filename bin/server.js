@@ -33,7 +33,7 @@ process.on('unhandledRejection', (reason, promise) => {
 // Graceful shutdown handler
 process.on('SIGTERM', () => {
     debug('SIGTERM received, shutting down gracefully');
-    app.close(() => {
+    server.close(() => {
         debug('HTTP server closed');
         process.exit(0);
     });
