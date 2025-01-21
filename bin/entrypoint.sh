@@ -111,41 +111,44 @@ chown -R root:root /etc/supervisor/
 echo "Setting up supervisord configuration..."
 
 # Create required directories
-mkdir -p /etc/worker /etc/supervisor/conf.d /var/log/supervisor /var/run
-chmod 755 /etc/worker /etc/supervisor/conf.d /var/log/supervisor /var/run
-chown root:root /etc/supervisor
+mkdir -p /etc/worker /etc/supervisor/conf.d /var/log/supervisor /var/run/supervisor
+chmod 755 /etc/worker /etc/supervisor/conf.d /var/log/supervisor /var/run/supervisor
+chown -R root:root /etc/supervisor
 
-# Verify services.yml exists and is readable
+# Copy default services.yml if not mounted
 if [ ! -f "/etc/worker/services.yml" ]; then
-    echo "Error: /etc/worker/services.yml not found"
-    ls -la /etc/worker/
-    exit 1
+    echo "Warning: /etc/worker/services.yml not found, using default configuration"
+    cp src/configs/services.yml /etc/worker/services.yml || {
+        echo "Error: Failed to copy default services.yml"
+        exit 1
+    }
 fi
 chmod 644 /etc/worker/services.yml
 
 echo "Services configuration input:"
 cat /etc/worker/services.yml
 
+# Install js-yaml if not present
+if ! npm list -g js-yaml >/dev/null 2>&1; then
+    echo "Installing js-yaml..."
+    npm install -g js-yaml
+fi
+
 echo "Converting services.yml to supervisord format..."
 echo "Environment variables:"
 env | grep -E "SERVICE_|NODE_"
 echo "Node.js version: $(node --version)"
-echo "Script location: $(which convert-services.js)"
 
-# Ensure script is executable and in the correct location
-cp bin/convert-services.js /usr/local/bin/
+# Copy and prepare conversion script
+mkdir -p /usr/local/bin
+cp bin/convert-services.js /usr/local/bin/ || {
+    echo "Error: Failed to copy convert-services.js"
+    exit 1
+}
 chmod +x /usr/local/bin/convert-services.js
 
-echo "Converting services using Node.js directly..."
+echo "Converting services using Node.js..."
 node /usr/local/bin/convert-services.js /etc/worker/services.yml /etc/supervisor/conf.d/services.conf
-
-# Verify generated configuration
-echo "Generated supervisord configuration:"
-cat /etc/supervisor/conf.d/services.conf
-
-# Ensure correct permissions
-chown -R root:root /etc/supervisor/conf.d/
-chmod 644 /etc/supervisor/conf.d/services.conf
 CONVERT_EXIT=$?
 
 if [ $CONVERT_EXIT -ne 0 ]; then
@@ -154,13 +157,16 @@ if [ $CONVERT_EXIT -ne 0 ]; then
     cat /usr/local/bin/convert-services.js
     echo "Services.yml content:"
     cat /etc/worker/services.yml
-    echo "Installed packages:"
-    npm list -g
     exit 1
 fi
 
 echo "Generated supervisord configuration:"
 cat /etc/supervisor/conf.d/services.conf
+
+# Set correct permissions
+chown -R root:root /etc/supervisor
+chmod 644 /etc/supervisor/conf.d/services.conf
+chmod 755 /etc/supervisor/conf.d
 
 # Verify supervisord configuration
 echo "Verifying supervisord configuration..."
@@ -174,48 +180,80 @@ fi
 echo "Starting supervisord..."
 echo "Service control: SSHD=${SERVICE_ENABLE_SSHD}, API=${SERVICE_ENABLE_API}"
 
-# Verify supervisord configuration before starting
-echo "Verifying supervisord configuration..."
-/usr/bin/supervisord -c /etc/supervisor/supervisord.conf -t
-if [ $? -ne 0 ]; then
-    echo "Error: Invalid supervisord configuration"
-    cat /etc/supervisor/supervisord.conf
-    cat /etc/supervisor/conf.d/services.conf
-    exit 1
-fi
-
-# Start supervisord with proper configuration
+# Start supervisord daemon
 /usr/bin/supervisord -c /etc/supervisor/supervisord.conf
 
-# Wait for supervisord to be ready
+# Wait for supervisord socket to be ready
 echo "Waiting for supervisord to be ready..."
 retry_count=0
 while [ $retry_count -lt 30 ]; do
-    if supervisorctl status >/dev/null 2>&1; then
+    if [ -e "/var/run/supervisor.sock" ] && supervisorctl status >/dev/null 2>&1; then
         echo "Supervisord is ready"
         break
     fi
+    echo "Waiting for supervisord... (attempt $((retry_count + 1))/30)"
     retry_count=$((retry_count + 1))
     sleep 1
 done
 
 if [ $retry_count -eq 30 ]; then
     echo "Error: Supervisord failed to start"
+    cat /var/log/supervisor/supervisord.log
     exit 1
 fi
 
-# Start and verify services
+# Update supervisord and clear stale state
+supervisorctl update
+supervisorctl clear all
+
+# Start services based on environment
 if [[ "${SERVICE_ENABLE_SSHD}" == "true" ]]; then
     echo "Starting SSHD services..."
-    supervisorctl start sshd ssh_keys_sync || { echo "Error starting SSHD services"; exit 1; }
-    check_service_health sshd || exit 1
-    check_service_health ssh_keys_sync || exit 1
+    supervisorctl start sshd || {
+        echo "Error starting SSHD service"
+        supervisorctl status
+        cat /var/log/supervisor/supervisord.log
+        exit 1
+    }
+    sleep 2
+    supervisorctl start ssh_keys_sync || {
+        echo "Error starting SSH key sync service"
+        supervisorctl status
+        cat /var/log/supervisor/supervisord.log
+        exit 1
+    }
+    
+    # Verify SSHD services
+    check_service_health sshd || {
+        echo "SSHD health check failed"
+        supervisorctl status
+        cat /var/log/{supervisor/supervisord,sshd}.log
+        exit 1
+    }
+    check_service_health ssh_keys_sync || {
+        echo "SSH key sync health check failed"
+        supervisorctl status
+        cat /var/log/{supervisor/supervisord,ssh-keys-sync}.log
+        exit 1
+    }
 fi
 
 if [[ "${SERVICE_ENABLE_API}" == "true" ]]; then
     echo "Starting API service..."
-    supervisorctl start k8gate || { echo "Error starting API service"; exit 1; }
-    check_service_health k8gate || exit 1
+    supervisorctl start k8gate || {
+        echo "Error starting API service"
+        supervisorctl status
+        cat /var/log/supervisor/supervisord.log
+        exit 1
+    }
+    
+    # Verify API service
+    check_service_health k8gate || {
+        echo "API service health check failed"
+        supervisorctl status
+        cat /var/log/{supervisor/supervisord,k8gate}.log
+        exit 1
+    }
     
     # Additional API health check
     echo "Checking API health..."
@@ -226,16 +264,24 @@ if [[ "${SERVICE_ENABLE_API}" == "true" ]]; then
             break
         fi
         echo "Waiting for API to start... (attempt $((retry_count + 1))/30)"
+        supervisorctl status k8gate
+        tail -n 5 /var/log/k8gate.log
         retry_count=$((retry_count + 1))
         sleep 1
     done
     
     if [ $retry_count -eq 30 ]; then
         echo "ERROR: API health check failed"
+        supervisorctl status
+        cat /var/log/{supervisor/supervisord,k8gate}.log
         curl -v http://localhost:8080/health || true
         exit 1
     fi
 fi
+
+# Show final service status
+echo "Final service status:"
+supervisorctl status
 
 # Show final service status
 echo "Final service status:"

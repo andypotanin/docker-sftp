@@ -1,26 +1,37 @@
 services:
   - name: sshd
-    command: /usr/sbin/sshd -D -f /etc/ssh/sshd_config -e
-    autostart: ${SERVICE_ENABLE_SSHD}
+    command: /usr/sbin/sshd -D -f ${SSHD_CONFIG_PATH:-/etc/ssh/sshd_config} -e
+    autostart: ${SERVICE_ENABLE_SSHD:-true}
     autorestart: true
+    user: root
+    directory: ${SSH_CONFIG_DIR:-/etc/ssh}
     envs:
-      - DEBUG=ssh:*,auth:*
-  
+      - DEBUG=${SSHD_DEBUG:-ssh:*,auth:*}
+      - HOME=${ROOT_HOME:-/root}
+      - NODE_ENV=${NODE_ENV:-production}
+
   - name: k8gate
-    command: node /opt/sources/rabbitci/rabbit-ssh/bin/server.js
-    autostart: ${SERVICE_ENABLE_API}
+    command: node ${APP_ROOT:-/opt/sources/rabbitci/rabbit-ssh}/bin/server.js
+    autostart: ${SERVICE_ENABLE_API:-true}
     autorestart: true
+    user: ${SERVICE_USER:-udx}
+    directory: ${APP_ROOT:-/opt/sources/rabbitci/rabbit-ssh}
     envs:
-      - DEBUG=k8gate:*,api:*,auth:*
-      - NODE_ENV=production
-      - PORT=8080
-      
+      - DEBUG=${API_DEBUG:-k8gate:*,api:*,auth:*,ssh:*}
+      - NODE_ENV=${NODE_ENV:-production}
+      - PORT=${API_PORT:-8080}
+      - HOME=${SERVICE_HOME:-/home/udx}
+
   - name: ssh_keys_sync
-    command: node /opt/sources/rabbitci/rabbit-ssh/bin/controller.keys.js
-    autostart: ${SERVICE_ENABLE_SSHD}
+    command: node ${APP_ROOT:-/opt/sources/rabbitci/rabbit-ssh}/bin/controller.keys.js
+    autostart: ${SERVICE_ENABLE_SSHD:-true}
     autorestart: true
+    user: ${SERVICE_USER:-udx}
+    directory: ${APP_ROOT:-/opt/sources/rabbitci/rabbit-ssh}
     envs:
-      - DEBUG=ssh:keys:*,auth:*
-      - DIRECTORY_KEYS_BASE=/etc/ssh/authorized_keys.d
-      - PASSWORD_FILE=/etc/passwd
-      - PASSWORDS_TEMPLATE=alpine.passwords
+      - DEBUG=${KEYS_DEBUG:-ssh:keys:*,auth:*}
+      - NODE_ENV=${NODE_ENV:-production}
+      - DIRECTORY_KEYS_BASE=${SSH_KEYS_DIR:-/etc/ssh/authorized_keys.d}
+      - PASSWORD_FILE=${PASSWORD_FILE:-/etc/passwd}
+      - PASSWORDS_TEMPLATE=${PASSWORD_TEMPLATE:-alpine.passwords}
+      - HOME=${SERVICE_HOME:-/home/udx}
