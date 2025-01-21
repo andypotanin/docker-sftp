@@ -81,32 +81,55 @@ export DEBUG=ssh*,sftp*,k8gate*,express*
 export NODE_ENV=production
 export NODE_PORT=8080
 
-# Start services using worker service management
+# Start services directly
 if [[ -f "/etc/worker/services.yml" ]]; then
-    echo "Starting services from worker configuration..."
+    echo "Starting services directly..."
     
     # Start services based on configuration
     if [[ "${SERVICE_ENABLE_SSHD}" == "true" ]]; then
         echo "Starting SSHD service..."
-        /usr/local/bin/worker service start sshd &
+        /usr/sbin/sshd -D -f /etc/ssh/sshd_config -e &
+        echo "Waiting for SSHD to start..."
+        while ! netstat -tlpn | grep -q ':22'; do
+            sleep 1
+        done
     fi
 
     if [[ "${SERVICE_ENABLE_API}" == "true" ]]; then
         echo "Starting API service..."
-        /usr/local/bin/worker service start k8gate &
+        cd /opt/sources/rabbitci/rabbit-ssh && \
+        DEBUG=k8gate:*,api:*,auth:*,ssh:*,sftp:* \
+        NODE_ENV=production \
+        PORT=8080 \
+        NODE_PORT=8080 \
+        HOME=/home/udx \
+        SERVICE_ENABLE_API=true \
+        SERVICE_ENABLE_SSHD=true \
+        node bin/server.js &
+        
+        echo "Waiting for API server to start..."
+        while ! netstat -tlpn | grep -q ':8080'; do
+            sleep 1
+        done
     fi
 
     # Start key synchronization service if SSHD is enabled
     if [[ "${SERVICE_ENABLE_SSHD}" == "true" ]]; then
         echo "Starting SSH key synchronization service..."
-        /usr/local/bin/worker service start ssh-keys-sync &
+        cd /opt/sources/rabbitci/rabbit-ssh && \
+        DEBUG=ssh:keys:*,auth:* \
+        DIRECTORY_KEYS_BASE=/etc/ssh/authorized_keys.d \
+        PASSWORD_FILE=/etc/passwd \
+        PASSWORDS_TEMPLATE=alpine.passwords \
+        HOME=/home/udx \
+        node bin/controller.keys.js &
     fi
 
     # Wait for services to initialize
     sleep 3
 
     # Monitor logs
-    exec tail -F /var/log/k8gate*.log /var/log/auth.log | grep --line-buffered -E "error|warn|debug|info"
+    exec tail -F /var/log/k8gate*.log /var/log/auth.log /var/log/sshd.log 2>/dev/null | grep --line-buffered -E "error|warn|debug|info"
 else
     echo "Error: No worker service configuration found at /etc/worker/services.yml"
     exit 1
