@@ -100,6 +100,43 @@ export DEBUG="${DEBUG:-*},worker:*"
 echo "Worker binary: $worker_path ($(ls -l $worker_path))"
 echo "Worker version: $($worker_path --version)"
 
+# Initialize worker daemon
+echo "Initializing worker daemon..."
+$worker_path init || {
+    echo "Failed to initialize worker daemon"
+    $worker_path init --debug 2>&1
+    exit 1
+}
+
+# Verify services configuration exists and is readable
+config_file="/etc/worker/services.yml"
+if [ ! -f "$config_file" ]; then
+    echo "Error: services.yml not found at $config_file"
+    ls -la /etc/worker/
+    exit 1
+fi
+
+# Ensure proper permissions on config file
+chmod 644 "$config_file"
+
+# Validate services configuration
+echo "Validating services configuration..."
+$worker_path validate "$config_file" || {
+    echo "Error: Invalid services configuration"
+    echo "Configuration contents:"
+    cat "$config_file"
+    exit 1
+}
+
+# List available services
+echo "Available services:"
+$worker_path list || {
+    echo "Error: Failed to list services"
+    echo "Service listing output:"
+    $worker_path list --debug 2>&1
+    exit 1
+}
+
 # Function to start a service with enhanced debugging
 start_service() {
     local service_name="$1"
@@ -108,6 +145,17 @@ start_service() {
     local health_check="$4"
     
     echo "Starting ${service_name} service..."
+    
+    # Show service configuration before starting
+    echo "Service configuration for ${service_name}:"
+    $worker_path show "${service_name}" --debug || true
+    
+    # Ensure log file exists and has proper permissions
+    touch "${log_file}" 2>/dev/null || true
+    chmod 644 "${log_file}" 2>/dev/null || true
+    chown udx:udx "${log_file}" 2>/dev/null || true
+    
+    # Start the service with debug output
     $worker_path start "${service_name}" --debug || {
         echo "ERROR: Failed to start ${service_name} service"
         echo "Service configuration:"
