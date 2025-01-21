@@ -100,7 +100,7 @@ jobs:
         
         echo "Testing supervisord configuration..."
         docker run --rm \
-          -v ${PWD}/src/configs/services.yml:/etc/worker/services.yml:ro \
+          -v ${PWD}/.github/workflows/services.yml:/etc/worker/services.yml:ro \
           -e NODE_ENV=test \
           -e SERVICE_ENABLE_SSHD=true \
           -e SERVICE_ENABLE_API=true \
@@ -117,7 +117,7 @@ jobs:
           -e SERVICE_ENABLE_API=true \
           -e DEBUG=k8gate:*,api:*,auth:*,ssh:*,worker:* \
           -e SERVICE_ENABLE_K8S=false \
-          -v ${PWD}/src/configs/services.yml:/etc/worker/services.yml:ro \
+          -v ${PWD}/.github/workflows/services.yml:/etc/worker/services.yml:ro \
           -e ACCESS_TOKEN=${ACCESS_TOKEN} \
           -e KUBERNETES_CLUSTER_ENDPOINT=${KUBERNETES_CLUSTER_ENDPOINT} \
           -e KUBERNETES_CLUSTER_NAME=${KUBERNETES_CLUSTER_NAME} \
