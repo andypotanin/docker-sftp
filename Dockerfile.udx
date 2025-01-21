@@ -89,15 +89,18 @@ RUN chmod 755 /etc/ssh && \
     chown -R udx:udx /var/log && \
     chmod 777 /etc/ssh/authorized_keys.d
 # Configure supervisord
-COPY --chown=root:root static/etc/supervisor/supervisord.conf /etc/supervisor/supervisord.conf
-COPY --chown=root:root static/etc/supervisor/services.conf /etc/supervisor/conf.d/services.conf
-RUN mkdir -p /var/log/supervisor /var/run && \
+RUN mkdir -p /etc/supervisor/conf.d /var/log/supervisor /var/run && \
     chmod 755 /var/log/supervisor /var/run && \
     touch /var/run/supervisor.sock && \
-    chmod 700 /var/run/supervisor.sock && \
-    chown -R root:root /etc/supervisor && \
+    chmod 700 /var/run/supervisor.sock
+
+COPY --chown=root:root static/etc/supervisor/supervisord.conf /etc/supervisor/supervisord.conf
+COPY --chown=root:root static/etc/supervisor/services.conf /etc/supervisor/conf.d/services.conf
+
+RUN chown -R root:root /etc/supervisor && \
     chmod 644 /etc/supervisor/supervisord.conf && \
-    chmod 644 /etc/supervisor/conf.d/services.conf
+    chmod 644 /etc/supervisor/conf.d/services.conf && \
+    supervisord -c /etc/supervisor/supervisord.conf -t
 
 # Fix SSH config and logging permissions
 RUN chmod 644 /etc/ssh/sshd_config && \
