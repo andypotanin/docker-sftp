@@ -19,10 +19,12 @@ async function startGateway(config = {}) {
     // Initialize API server
     const apiServer = new ApiServer(config, keyManager);
     
-    // Start server
-    await apiServer.start(config.port || process.env.NODE_PORT || 8080);
-
+    // Start server and store reference
+    const serverInstance = await apiServer.start(config.port || process.env.NODE_PORT || 8080);
+    
+    // Export server instance for proper shutdown handling
     return {
+        server: serverInstance,
         keyManager,
         apiServer,
         events

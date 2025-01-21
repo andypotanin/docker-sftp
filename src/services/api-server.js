@@ -64,11 +64,12 @@ class ApiServer {
 
         // Start server
         return new Promise((resolve) => {
-            this.server = this.app.listen(port, '0.0.0.0', () => {
+            const server = this.app.listen(port, '0.0.0.0', () => {
                 debug(`Server listening on port ${port}`);
                 this.notifyStartup();
-                resolve();
+                resolve(server);
             });
+            this.server = server;
         });
     }
 
