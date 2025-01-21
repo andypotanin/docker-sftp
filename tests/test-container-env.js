@@ -1,3 +1,9 @@
+/**
+ * Test Container Environment
+ * 
+ * This test suite verifies the environment variables set in the container.
+ * It uses the `docker exec` command to run commands within the container.
+ */
 const { exec } = require('child_process');
 const util = require('util');
 const execAsync = util.promisify(exec);

@@ -1,0 +1,51 @@
+name: Deploy to Cloud Run
+
+on:
+  workflow_run:
+    workflows: ["Build and Push Docker Image"]
+    types:
+      - completed
+
+env:
+  PROJECT_ID: your-project-id
+  REGION: us-central1
+  SERVICE_NAME: udx-sftp
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Google Auth
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+
+      - name: Deploy to Cloud Run
+        id: deploy
+        uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          service: ${{ env.SERVICE_NAME }}
+          region: ${{ env.REGION }}
+          image: docker.io/usabilitydynamics/udx-sftp:${{ github.sha }}
+          flags: |
+            --port=8080
+            --allow-unauthenticated
+            --min-instances=1
+            --max-instances=10
+            --cpu=1
+            --memory=1Gi
+            --set-env-vars=SERVICE_ENABLE_API=true,SERVICE_ENABLE_SSHD=false
+
+      - name: Show Output
+        run: echo ${{ steps.deploy.outputs.url }}
