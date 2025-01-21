@@ -34,35 +34,12 @@ ENV NODE_ENV=production \
 # Switch to root for package installations
 USER root
 
-# Install Go and build worker binary
+# Install supervisord for service management
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    golang-go \
-    git \
-    make \
+    supervisor \
     && rm -rf /var/lib/apt/lists/* \
-    && echo "Building worker binary from source..." \
-    && git clone https://github.com/andypotanin/worker.git /tmp/worker \
-    && cd /tmp/worker \
-    && make build \
-    && cp bin/worker /usr/local/bin/worker \
-    && chmod +x /usr/local/bin/worker \
-    && chown root:root /usr/local/bin/worker \
-    && echo "Creating worker directories..." \
-    && mkdir -p /etc/worker/{configs,logs} \
-    && chmod 755 /etc/worker /etc/worker/configs /etc/worker/logs \
-    && chown -R root:root /etc/worker \
-    && echo "Testing worker binary..." \
-    && /usr/local/bin/worker --version \
-    && echo "Creating test configuration..." \
-    && echo 'version: "1.0"\nkind: "worker"\n\nservices:\n  - name: test\n    command: "echo test"\n    autostart: true' > /etc/worker/test.yml \
-    && echo "Test configuration contents:" \
-    && cat /etc/worker/test.yml \
-    && echo "Validating test configuration..." \
-    && WORKER_DEBUG=true /usr/local/bin/worker validate /etc/worker/test.yml \
-    && echo "Testing worker daemon..." \
-    && WORKER_DEBUG=true /usr/local/bin/worker init \
-    && WORKER_DEBUG=true /usr/local/bin/worker list \
-    && rm -rf /tmp/worker
+    && mkdir -p /etc/supervisor/conf.d /var/log/supervisor \
+    && echo "[supervisord]\nnodaemon=true\nuser=root\n\n[program:sshd]\ncommand=/usr/sbin/sshd -D -f /etc/ssh/sshd_config -e\nautostart=true\nautorestart=true\nstdout_logfile=/var/log/sshd.log\nstderr_logfile=/var/log/sshd.log\nenvironment=DEBUG=\"ssh:*,auth:*\",HOME=\"/root\"\n\n[program:k8gate]\ncommand=node /opt/sources/rabbitci/rabbit-ssh/bin/server.js\nautostart=true\nautorestart=true\nuser=udx\ndirectory=/opt/sources/rabbitci/rabbit-ssh\nstdout_logfile=/var/log/k8gate.log\nstderr_logfile=/var/log/k8gate.log\nenvironment=DEBUG=\"k8gate:*,api:*,auth:*,ssh:*\",NODE_ENV=\"production\",PORT=\"8080\",NODE_PORT=\"8080\",HOME=\"/home/udx\"\n\n[program:ssh_keys_sync]\ncommand=node /opt/sources/rabbitci/rabbit-ssh/bin/controller.keys.js\nautostart=true\nautorestart=true\nuser=udx\ndirectory=/opt/sources/rabbitci/rabbit-ssh\nstdout_logfile=/var/log/ssh-keys-sync.log\nstderr_logfile=/var/log/ssh-keys-sync.log\nenvironment=DEBUG=\"ssh:keys:*,auth:*\",DIRECTORY_KEYS_BASE=\"/etc/ssh/authorized_keys.d\",PASSWORD_FILE=\"/etc/passwd\",PASSWORDS_TEMPLATE=\"alpine.passwords\",HOME=\"/home/udx\"" > /etc/supervisor/conf.d/services.conf
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -74,17 +51,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Verify worker installation and basic functionality
-RUN echo "Testing worker configuration..." \
-    && echo 'version: "1.0"\nservices:\n  - name: test\n    command: "echo test"\n    autostart: true' > /etc/worker/test.yml \
-    && echo "Test configuration:" \
-    && cat /etc/worker/test.yml \
-    && echo "Validating test configuration..." \
-    && /usr/local/bin/worker validate /etc/worker/test.yml \
-    && echo "Testing service management..." \
-    && /usr/local/bin/worker list \
-    && /usr/local/bin/worker show test \
-    && echo "Worker binary verification complete"
+# Verify supervisord configuration and setup directories
+RUN echo "Testing supervisord configuration..." \
+    && mkdir -p /var/run /var/log/supervisor \
+    && chmod 755 /var/run /var/log/supervisor \
+    && touch /var/run/supervisor.sock \
+    && chmod 700 /var/run/supervisor.sock \
+    && chown -R root:root /etc/supervisor \
+    && supervisord -c /etc/supervisor/supervisord.conf -t \
+    && echo "Supervisord configuration test passed" \
+    && rm -f /var/run/supervisor.sock
 
 # Set up directories and permissions
 WORKDIR /opt/sources/rabbitci/rabbit-ssh
@@ -94,19 +70,12 @@ RUN mkdir -p \
     /home/udx/.kube \
     /root/.ssh \
     /etc/ssh \
-    /home/udx/.cd/configs \
-    /etc/worker \
     /var/log \
     /usr/local/lib/node_modules \
     /home/udx/.npm \
-    /usr/local/bin \
-    /home/udx/.worker && \
+    /usr/local/bin && \
     ln -s /usr/bin/node /usr/local/bin/node && \
-    chown -R udx:udx /home/udx && \
-    chmod 755 /home/udx/.cd/configs && \
-    chmod 755 /home/udx/.worker && \
-    chmod 755 /etc/worker && \
-    chown root:root /etc/worker
+    chown -R udx:udx /home/udx
 
 # Set up SSH configuration
 COPY --chown=root:root static/etc/ssh/ /etc/ssh/
@@ -120,7 +89,13 @@ RUN chmod 755 /etc/ssh && \
     chown -R udx:udx /opt/sources/rabbitci && \
     chown -R udx:udx /var/log && \
     chmod 777 /etc/ssh/authorized_keys.d
-COPY --chown=udx:udx src/configs/worker.yml /home/udx/.cd/configs/worker.yml
+# Configure supervisord
+COPY --chown=root:root static/etc/supervisor/supervisord.conf /etc/supervisor/supervisord.conf
+COPY --chown=root:root static/etc/supervisor/services.conf /etc/supervisor/conf.d/services.conf
+RUN mkdir -p /var/log/supervisor /var/run && \
+    chmod 755 /var/log/supervisor /var/run && \
+    touch /var/run/supervisor.sock && \
+    chmod 700 /var/run/supervisor.sock
 
 # Fix SSH config and logging permissions
 RUN chmod 644 /etc/ssh/sshd_config && \
@@ -142,63 +117,25 @@ ENV PATH $PATH:/usr/local/google-cloud-sdk/bin
 # Copy application files
 COPY --chown=udx:udx . /opt/sources/rabbitci/rabbit-ssh/
 
-# Copy and validate services configuration
-COPY --chown=root:root .github/workflows/services.yml /etc/worker/services.yml
+# Set up log files and permissions
 RUN set -ex \
-    && echo "Setting up worker directories and log files..." \
-    && mkdir -p /etc/worker/{configs,logs} /var/log/worker \
+    && echo "Setting up log files..." \
+    && mkdir -p /var/log/supervisor \
     && touch /var/log/{sshd,k8gate,ssh-keys-sync,auth}.log \
-    && chown -R udx:udx /var/log/{worker,sshd.log,k8gate.log,ssh-keys-sync.log,auth.log} \
-    && chmod 755 /etc/worker /etc/worker/configs /etc/worker/logs /var/log/worker \
+    && chown -R udx:udx /var/log/{sshd.log,k8gate.log,ssh-keys-sync.log,auth.log} \
     && chmod 644 /var/log/{sshd,k8gate,ssh-keys-sync,auth}.log \
-    && echo "Verifying services configuration..." \
-    && echo "Worker binary version: $(/usr/local/bin/worker --version)" \
-    && echo "Configuration contents:" \
-    && cat /etc/worker/services.yml \
-    && echo "Validating services configuration..." \
-    && WORKER_DEBUG=true DEBUG=worker:*,ssh:*,k8gate:* /usr/local/bin/worker validate /etc/worker/services.yml \
-    && echo "Setting up service configuration..." \
-    && cp /etc/worker/services.yml /etc/worker/configs/services.yml \
-    && chmod 644 /etc/worker/services.yml /etc/worker/configs/services.yml \
-    && chown root:root /etc/worker/services.yml /etc/worker/configs/services.yml \
-    && echo "Testing worker initialization..." \
-    && WORKER_DEBUG=true /usr/local/bin/worker init \
-    && WORKER_DEBUG=true /usr/local/bin/worker list \
-    && echo "Worker configuration validated successfully"
+    && echo "Log files setup completed successfully"
 
-# Create config directory and copy services.yml there as well
-RUN mkdir -p /etc/worker/configs && \
-    cp /etc/worker/services.yml /etc/worker/configs/services.yml && \
-    chown root:root /etc/worker/configs/services.yml && \
-    chmod 644 /etc/worker/configs/services.yml && \
-    echo "Verifying worker configuration..." && \
-    echo "Worker binary version and location:" && \
-    which worker && worker --version && \
-    echo "Configuration location:" && \
-    ls -la /etc/worker/services.yml && \
-    echo "Configuration contents:" && \
-    cat /etc/worker/services.yml && \
-    echo "Worker directory contents:" && \
-    ls -la /etc/worker/ && \
-    echo "Validating services configuration..." && \
-    WORKER_DEBUG=true DEBUG=worker:*,ssh:*,k8gate:* /usr/local/bin/worker validate /etc/worker/services.yml && \
-    echo "Worker configuration validated successfully" || \
-    (echo "ERROR: Worker configuration validation failed" && \
-     echo "Worker debug output:" && \
-     WORKER_DEBUG=true /usr/local/bin/worker list --debug && \
-     echo "Configuration file contents:" && \
-     cat /etc/worker/services.yml && \
-     echo "Service status:" && \
-     WORKER_DEBUG=true /usr/local/bin/worker status --debug || true && \
-     echo "Environment variables:" && \
-     env | grep -E "WORKER_|SERVICE_|NODE_|DEBUG" || true && \
-     echo "Worker binary permissions:" && \
-     ls -l /usr/local/bin/worker && \
-     echo "Configuration file permissions:" && \
-     ls -l /etc/worker/services.yml && \
-     echo "Trying worker help:" && \
-     /usr/local/bin/worker --help || true && \
-     exit 1)
+# Verify configuration files and permissions
+RUN echo "Verifying configuration files and permissions..." && \
+    test -f /etc/supervisor/supervisord.conf && \
+    test -f /etc/supervisor/conf.d/services.conf && \
+    test -d /var/log/supervisor && \
+    test -d /var/run && \
+    chmod 755 /var/run /var/log/supervisor && \
+    chmod 644 /etc/supervisor/supervisord.conf && \
+    chmod 644 /etc/supervisor/conf.d/services.conf && \
+    echo "Configuration files and permissions verified successfully"
 
 # Set up entrypoint scripts and permissions
 COPY --chown=root:root bin/entrypoint.sh /usr/local/bin/

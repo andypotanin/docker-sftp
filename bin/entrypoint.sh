@@ -37,10 +37,8 @@ elif [ ! -f "/etc/ssh/ssh_host_rsa_key" ]; then
     echo "Please ensure SSH keys are mounted correctly"
 fi
 
-# Load worker configuration if available
-if [ -f "/usr/local/lib/worker_config.sh" ]; then
-    source /usr/local/lib/worker_config.sh
-fi
+# Ensure supervisord configuration directory exists
+mkdir -p /etc/supervisor/conf.d
 
 # Setup Kubernetes if enabled
 if [ "${SERVICE_ENABLE_K8S}" != "false" ] && [ -n "${KUBERNETES_CLUSTER_CERTIFICATE}" ]; then
@@ -81,260 +79,69 @@ export DEBUG=ssh*,sftp*,k8gate*,express*
 export NODE_ENV=production
 export NODE_PORT=8080
 
-# Start services using worker service management
-echo "Starting services from worker configuration..."
+# Start services using supervisord
+echo "Starting services using supervisord..."
 
-# Check worker binary and validate configuration
-worker_path="/usr/local/bin/worker"
-if [ ! -x "$worker_path" ]; then
-    echo "Error: worker binary not found or not executable at $worker_path"
-    ls -la /usr/local/bin/worker* || true
-    echo "PATH=$PATH"
-    exit 1
-fi
-
-# Set debug environment for worker
-export WORKER_DEBUG=true
-export DEBUG="${DEBUG:-*},worker:*"
-
-# Verify worker installation
-echo "Worker binary: $worker_path ($(ls -l $worker_path))"
-echo "Worker version: $($worker_path --version)"
-
-# Verify services configuration exists and is readable
-config_file="/etc/worker/services.yml"
-if [ ! -f "$config_file" ]; then
-    echo "Error: services.yml not found at $config_file"
-    ls -la /etc/worker/
-    exit 1
-fi
-
-# Verify configuration file permissions and ownership
-chown root:root "$config_file"
-chmod 644 "$config_file"
-
-# Show configuration contents for debugging
-echo "Services configuration contents:"
-cat "$config_file"
-
-# Ensure proper permissions on config file
-chmod 644 "$config_file"
-chown root:root "$config_file"
-
-# Validate services configuration
-echo "Validating services configuration..."
-$worker_path validate "$config_file" || {
-    echo "Error: Invalid services configuration"
-    echo "Configuration contents:"
-    cat "$config_file"
-    echo "Worker debug output:"
-    $worker_path validate "$config_file" --debug 2>&1
-    exit 1
-}
-
-# Initialize worker daemon
-echo "Initializing worker daemon..."
-$worker_path init || {
-    echo "Failed to initialize worker daemon"
-    $worker_path init --debug 2>&1
-    exit 1
-}
-
-# List available services
-echo "Available services:"
-$worker_path list || {
-    echo "Error: Failed to list services"
-    echo "Service listing output:"
-    $worker_path list --debug 2>&1
-    echo "Current configuration:"
-    ls -la /etc/worker/
-    cat "$config_file"
-    exit 1
-}
-
-# Function to start a service with enhanced debugging
-start_service() {
-    local service_name="$1"
-    local process_name="$2"
-    local log_file="$3"
-    local health_check="$4"
+# Function to check service health
+check_service_health() {
+    local service=$1
+    local max_retries=${2:-30}
+    local retry_count=0
     
-    echo "Starting ${service_name} service..."
-    
-    # Show service configuration before starting
-    echo "Service configuration for ${service_name}:"
-    $worker_path show "${service_name}" --debug || true
-    
-    # Ensure log file exists and has proper permissions
-    touch "${log_file}" 2>/dev/null || true
-    chmod 644 "${log_file}" 2>/dev/null || true
-    chown udx:udx "${log_file}" 2>/dev/null || true
-    
-    # Start the service with debug output
-    $worker_path start "${service_name}" --debug || {
-        echo "ERROR: Failed to start ${service_name} service"
-        echo "Service configuration:"
-        $worker_path show "${service_name}" --debug || true
-        echo "Available services:"
-        $worker_path list --debug || true
-        echo "Process status:"
-        ps aux | grep "${process_name}" || true
-        if [ -f "${log_file}" ]; then
-            echo "${service_name} logs:"
-            tail -n 50 "${log_file}" || true
-        else
-            echo "Warning: Log file ${log_file} not found"
-        fi
-        echo "Worker debug output:"
-        WORKER_DEBUG=true $worker_path status --debug || true
-        echo "Configuration file contents:"
-        cat "$config_file"
-        return 1
-    }
-
-    # Wait for service to be ready with improved debugging
-    echo "Waiting for ${service_name} to be ready..."
-    local retries=30
-    while [ $retries -gt 0 ]; do
-        if eval "${health_check}"; then
-            echo "${service_name} is ready"
+    echo "Waiting for $service to start..."
+    while [ $retry_count -lt $max_retries ]; do
+        if supervisorctl status "$service" | grep -q "RUNNING"; then
+            echo "$service is running"
             return 0
         fi
-        echo "Health check failed, retrying in 1s (${retries} attempts left)"
-        if [ -f "${log_file}" ]; then
-            echo "Last 5 lines of ${service_name} logs:"
-            tail -n 5 "${log_file}" || true
-        fi
-        retries=$((retries - 1))
+        retry_count=$((retry_count + 1))
         sleep 1
     done
     
-    echo "ERROR: ${service_name} failed health check"
-    echo "Full service logs:"
-    cat "${log_file}" || true
+    echo "ERROR: $service failed to start"
+    supervisorctl status
     return 1
 }
 
-# Initialize worker daemon with debug output
-echo "Initializing worker daemon..."
-$worker_path init --debug || {
-    echo "Failed to initialize worker daemon"
-    echo "Worker debug output:"
-    $worker_path init --debug
-    exit 1
-}
+# Start supervisord
+echo "Starting supervisord..."
+/usr/bin/supervisord -c /etc/supervisor/supervisord.conf
 
-# List available services before starting
-echo "Available services before startup:"
-$worker_path list --debug || {
-    echo "Error: Failed to list services"
-    echo "Worker debug output:"
-    $worker_path list --debug
-    exit 1
-}
+# Wait for supervisord to be ready
+sleep 2
 
-# Start all services with proper error handling
-if [ -f "/etc/worker/services.yml" ]; then
-    # Start SSHD service if enabled
-    if [[ "${SERVICE_ENABLE_SSHD}" == "true" ]]; then
-        echo "Starting SSHD services..."
-        start_service "sshd" "sshd" "/var/log/sshd.log" "pgrep -f '/usr/sbin/sshd -D'" || exit 1
-        start_service "ssh_keys_sync" "controller.keys" "/var/log/ssh-keys-sync.log" "pgrep -f 'controller.keys.js'" || exit 1
-    fi
-
-    # Start API service if enabled
-    if [[ "${SERVICE_ENABLE_API}" == "true" ]]; then
-        echo "Starting API service..."
-        start_service "k8gate" "node.*server.js" "/var/log/k8gate.log" "curl -s http://localhost:8080/health > /dev/null" || exit 1
-    fi
-
-    # Verify all services started successfully
-    echo "Verifying all services..."
-    $worker_path status --debug || {
-        echo "ERROR: Service verification failed"
-        echo "Worker debug output:"
-        $worker_path status --debug
-        echo "Process status:"
-        ps aux | grep -E "sshd|controller.keys|server.js" || true
-        echo "Log files:"
-        tail -n 50 /var/log/*.log || true
-        exit 1
-    }
-
-    # Verify all services are running
-    echo "Verifying service status..."
-    $worker_path status --debug || {
-        echo "ERROR: Service status check failed"
-        $worker_path list --debug
-        exit 1
-    }
-
-    # Monitor logs with improved filtering and health checks
-    echo "All services started successfully. Starting log monitoring..."
-    
-    # Function to check service health with environment checks
-    check_service_health() {
-        local all_healthy=true
-        
-        # Check SSHD
-        if [[ "${SERVICE_ENABLE_SSHD}" == "true" ]]; then
-            if ! pgrep -f "/usr/sbin/sshd -D" > /dev/null; then
-                echo "ERROR: SSHD not running"
-                all_healthy=false
-            else
-                echo "SSHD: healthy"
-            fi
-            
-            # Check key sync service
-            if ! pgrep -f "controller.keys.js" > /dev/null; then
-                echo "ERROR: Key sync service not running"
-                all_healthy=false
-            else
-                echo "Key sync: healthy"
-            fi
-        fi
-        
-        # Check API server
-        if [[ "${SERVICE_ENABLE_API}" == "true" ]]; then
-            if ! curl -s http://localhost:8080/health > /dev/null; then
-                echo "ERROR: API server not responding"
-                all_healthy=false
-            else
-                echo "API server: healthy"
-            fi
-        fi
-        
-        # Show worker status
-        echo "Worker service status:"
-        $worker_path status --debug || true
-        
-        $all_healthy
-    }
-    
-    # Start health check loop in background
-    (
-        while true; do
-            if ! check_service_health; then
-                echo "Critical service failure detected!"
-                kill -TERM 1  # Signal main process to shutdown
-                exit 1
-            fi
-            sleep 30
-        done
-    ) &
-    
-    # Monitor all relevant logs
-    exec tail -F /var/log/sshd.log /var/log/k8gate.log /var/log/ssh-keys-sync.log /var/log/auth.log | grep --line-buffered -E "error|warn|debug|info|ERROR|WARN|DEBUG|INFO"
-else
-    echo "Error: No worker service configuration found at /etc/worker/services.yml"
-    exit 1
+# Start and verify services based on environment
+if [[ "${SERVICE_ENABLE_SSHD}" == "true" ]]; then
+    echo "Starting SSHD services..."
+    supervisorctl start sshd ssh_keys_sync
+    check_service_health sshd || exit 1
+    check_service_health ssh_keys_sync || exit 1
 fi
 
-# Start SSH daemon in foreground with debugging if no services started
-if [[ "${SERVICE_ENABLE_SSHD}" == "true" ]] && [[ ! -f "/etc/worker/services.yml" ]]; then
-    echo "Starting SSH daemon in fallback mode..."
-    exec /usr/sbin/sshd -D -e
+if [[ "${SERVICE_ENABLE_API}" == "true" ]]; then
+    echo "Starting API service..."
+    supervisorctl start k8gate
+    check_service_health k8gate || exit 1
+    
+    # Additional API health check
+    echo "Checking API health..."
+    retry_count=0
+    while [ $retry_count -lt 30 ]; do
+        if curl -sf http://localhost:8080/health > /dev/null; then
+            echo "API is healthy"
+            break
+        fi
+        retry_count=$((retry_count + 1))
+        sleep 1
+    done
+    
+    if [ $retry_count -eq 30 ]; then
+        echo "ERROR: API health check failed"
+        curl -v http://localhost:8080/health || true
+        exit 1
+    fi
 fi
 
-# This is a fallback and should never be reached
-exec tail -f /var/log/sshd.log /var/log/auth.log
+# Monitor logs
+echo "All services started successfully. Starting log monitoring..."
+exec tail -F /var/log/{sshd,k8gate,ssh-keys-sync,auth}.log | grep --line-buffered -E "error|warn|debug|info|ERROR|WARN|DEBUG|INFO"
