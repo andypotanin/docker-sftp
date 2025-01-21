@@ -171,23 +171,23 @@ RUN echo "Verifying worker configuration..." && \
     ls -la /etc/worker/ && \
     echo "\nValidating services configuration..." && \
     WORKER_DEBUG=true DEBUG=worker:*,ssh:*,k8gate:* /usr/local/bin/worker validate /etc/worker/services.yml && \
-    echo "Worker configuration validated successfully" || {
-        echo "\nERROR: Worker configuration validation failed"
-        echo "\nWorker debug output:"
-        WORKER_DEBUG=true /usr/local/bin/worker list --debug
-        echo "\nConfiguration file contents:"
-        cat /etc/worker/services.yml
-        echo "\nService status:"
-        WORKER_DEBUG=true /usr/local/bin/worker status --debug || true
-        echo "\nEnvironment variables:"
-        env | grep -E "WORKER_|SERVICE_|NODE_|DEBUG" || true
-        echo "\nWorker binary permissions:"
-        ls -l /usr/local/bin/worker
-        echo "\nConfiguration file permissions:"
-        ls -l /etc/worker/services.yml
-        echo "\nTrying worker help:"
-        /usr/local/bin/worker --help || true
-        exit 1
+    echo "Worker configuration validated successfully" || \
+    sh -c 'echo "ERROR: Worker configuration validation failed" && \
+           echo "Worker debug output:" && \
+           WORKER_DEBUG=true /usr/local/bin/worker list --debug && \
+           echo "Configuration file contents:" && \
+           cat /etc/worker/services.yml && \
+           echo "Service status:" && \
+           WORKER_DEBUG=true /usr/local/bin/worker status --debug || true && \
+           echo "Environment variables:" && \
+           env | grep -E "WORKER_|SERVICE_|NODE_|DEBUG" || true && \
+           echo "Worker binary permissions:" && \
+           ls -l /usr/local/bin/worker && \
+           echo "Configuration file permissions:" && \
+           ls -l /etc/worker/services.yml && \
+           echo "Trying worker help:" && \
+           /usr/local/bin/worker --help || true && \
+           exit 1'
     }
 
 # Create config directory and copy services.yml there as well
