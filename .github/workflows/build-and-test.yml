@@ -101,6 +101,37 @@ jobs:
           sftp-gateway:${{ steps.version.outputs.TAG }} \
           ls -la /etc/worker/
         
+        # Prepare worker configuration directory
+        sudo mkdir -p /etc/worker/configs
+        sudo cp .github/workflows/services.yml /etc/worker/services.yml
+        sudo cp .github/workflows/services.yml /etc/worker/configs/services.yml
+        sudo chmod -R 755 /etc/worker
+        sudo chown -R root:root /etc/worker
+        echo "Worker configuration contents:"
+        cat /etc/worker/services.yml
+        
+        # Test worker binary and configuration
+        echo "Testing worker binary..."
+        docker run --rm sftp-gateway:${{ steps.version.outputs.TAG }} worker --version
+        
+        echo "Testing worker configuration validation..."
+        docker run --rm \
+          -v /etc/worker:/etc/worker:ro \
+          -e WORKER_DEBUG=true \
+          -e DEBUG=worker:*,ssh:*,k8gate:* \
+          -e NODE_ENV=test \
+          -e SERVICE_ENABLE_SSHD=true \
+          -e SERVICE_ENABLE_API=true \
+          -e STATE_PROVIDER=local \
+          sftp-gateway:${{ steps.version.outputs.TAG }} worker validate /etc/worker/services.yml
+        
+        # Verify worker configuration directory structure
+        echo "Verifying worker configuration structure..."
+        docker run --rm \
+          -v /etc/worker:/etc/worker:ro \
+          sftp-gateway:${{ steps.version.outputs.TAG }} \
+          ls -la /etc/worker/
+        
         # Start container with test configuration
         docker run -d --name test-container \
           --privileged \
@@ -145,7 +176,7 @@ jobs:
         docker exec test-container test -f /etc/ssh/authorized_keys.d/test-user || exit 1
         docker exec test-container test -f /etc/passwd || exit 1
         
-        # Test SSH configuration
+        # Test SSH configuration and worker setup
         docker exec test-container sh -c '
           # Check sshd config
           sshd -t || exit 1
@@ -157,6 +188,25 @@ jobs:
           # Verify key file permissions
           test -f /etc/ssh/authorized_keys.d/test-user || exit 1
           test "$(stat -c %a /etc/ssh/authorized_keys.d/test-user)" = "644" || exit 1
+          
+          # Verify worker configuration
+          test -d /etc/worker || exit 1
+          test -f /etc/worker/services.yml || exit 1
+          test "$(stat -c %a /etc/worker)" = "755" || exit 1
+          test "$(stat -c %a /etc/worker/services.yml)" = "644" || exit 1
+          
+          # Verify services are running
+          pgrep -f "/usr/sbin/sshd -D" || exit 1
+          pgrep -f "node.*server.js" || exit 1
+          pgrep -f "controller.keys.js" || exit 1
+          
+          # Check service logs exist
+          test -f /var/log/sshd.log || exit 1
+          test -f /var/log/k8gate.log || exit 1
+          test -f /var/log/ssh-keys-sync.log || exit 1
+          
+          # Check API health endpoint
+          curl -sf http://localhost:8080/health || exit 1
         ' || exit 1
         
         # Cleanup
