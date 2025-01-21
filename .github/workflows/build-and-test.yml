@@ -165,8 +165,8 @@ jobs:
         echo "Worker configuration contents:"
         cat /etc/worker/services.yml
 
-        # Start container with test configuration
-        docker run -d --name test-container \
+        # Create worker configuration directory in container
+        docker create --name test-container \
           --privileged \
           -e NODE_ENV=test \
           -e SERVICE_ENABLE_SSHD=true \
@@ -189,11 +189,18 @@ jobs:
           -e STATE_PROVIDER=local \
           -e WORKER_DEBUG=true \
           -e WORKER_CONFIG_DIR=/etc/worker \
+          -e WORKER_CONFIG_FILE=/etc/worker/services.yml \
           -v /etc/ssh/authorized_keys.d:/etc/ssh/authorized_keys.d:ro \
-          -v /etc/worker:/etc/worker:ro \
           -p 2222:22 \
           -p 8080:8080 \
           sftp-gateway:${{ steps.version.outputs.TAG }}
+
+        # Copy services.yml into container
+        docker cp .github/workflows/services.yml test-container:/etc/worker/services.yml
+        docker cp .github/workflows/services.yml test-container:/etc/worker/configs/services.yml
+
+        # Start the container
+        docker start test-container
         
         # Wait for container to start and show logs
         sleep 5
@@ -221,6 +228,20 @@ jobs:
           # Verify key file permissions
           test -f /etc/ssh/authorized_keys.d/test-user || exit 1
           test "$(stat -c %a /etc/ssh/authorized_keys.d/test-user)" = "644" || exit 1
+
+          # Verify worker configuration
+          echo "Worker configuration:"
+          ls -la /etc/worker/
+          cat /etc/worker/services.yml
+          
+          # Test worker binary
+          echo "Testing worker binary..."
+          worker --version
+          worker validate /etc/worker/services.yml || exit 1
+          
+          # Check service status
+          echo "Service status:"
+          worker status --debug || exit 1
           
           # Verify worker configuration
           test -d /etc/worker || exit 1
