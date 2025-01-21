@@ -37,19 +37,36 @@
  *
  *
  */
-const axios = require('axios');
-const async = require('async');
-const Mustache = require('mustache');
-const fs = require('fs');
+const { KeyManagementService } = require('../src');
 const debug = require('debug')('update-ssh');
-const _ = require('lodash');
-const utility = require('../lib/utility');
 
-module.exports.updateKeys = function updateKeys(options, taskCallback) {
+module.exports.updateKeys = async function updateKeys(options, taskCallback) {
+    const keyManager = new KeyManagementService({
+        keysPath: options.keysPath || process.env.DIRECTORY_KEYS_BASE || '/etc/ssh/authorized_keys.d',
+        passwordFile: options.passwordFile || process.env.PASSWORD_FILE || '/etc/passwd',
+        passwordTemplate: options.passwordTemplate || process.env.PASSWORDS_TEMPLATE || 'alpine.passwords',
+        accessToken: options.accessToken || process.env.ACCESS_TOKEN,
+        stateProvider: process.env.STATE_PROVIDER || 'kubernetes',
+        kubernetesConfig: {
+            endpoint: process.env.KUBERNETES_CLUSTER_ENDPOINT,
+            namespace: process.env.KUBERNETES_CLUSTER_NAMESPACE,
+            token: process.env.KUBERNETES_CLUSTER_USER_TOKEN
+        }
+    });
 
-    let allowedRoles = process.env.ALLOW_SSH_ACCESS_ROLES || 'admin,maintain,write';
-    let productionBranch = process.env.PRODUCTION_BRANCH || 'production';
-    let allowedRolesForProd = process.env.ALLOW_SSH_ACCES_PROD_ROLES || 'admin';
+    try {
+        const result = await keyManager.updateKeys();
+        if (typeof taskCallback === 'function') {
+            taskCallback(null, result);
+        }
+        return result;
+    } catch (err) {
+        debug('Failed to update keys:', err);
+        if (typeof taskCallback === 'function') {
+            taskCallback(err);
+        }
+        throw err;
+    }
 
     taskCallback = 'function' === typeof taskCallback ? taskCallback : function taskCallback() {
 
@@ -448,5 +465,22 @@ module.exports.updateKeys = function updateKeys(options, taskCallback) {
 };
 
 if (!module.parent) {
-    module.exports.updateKeys();
+    const keyManager = new KeyManagementService({
+        keysPath: process.env.DIRECTORY_KEYS_BASE || '/etc/ssh/authorized_keys.d',
+        passwordFile: process.env.PASSWORD_FILE || '/etc/passwd',
+        passwordTemplate: process.env.PASSWORDS_TEMPLATE || 'alpine.passwords',
+        accessToken: process.env.ACCESS_TOKEN,
+        stateProvider: process.env.STATE_PROVIDER || 'kubernetes',
+        kubernetesConfig: {
+            endpoint: process.env.KUBERNETES_CLUSTER_ENDPOINT,
+            namespace: process.env.KUBERNETES_CLUSTER_NAMESPACE,
+            token: process.env.KUBERNETES_CLUSTER_USER_TOKEN
+        }
+    });
+
+    keyManager.updateKeys().catch(err => {
+        debug('Failed to update keys:', err);
+        console.error('Error updating SSH keys:', err.message);
+        process.exit(1);
+    });
 }
