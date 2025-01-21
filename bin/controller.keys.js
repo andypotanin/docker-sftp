@@ -448,5 +448,26 @@ module.exports.updateKeys = function updateKeys(options, taskCallback) {
 };
 
 if (!module.parent) {
-    module.exports.updateKeys();
+    // Run in continuous mode if no parent module
+    const interval = process.env.SYNC_INTERVAL || 300; // Default 5 minutes
+    console.log(`Starting key sync service with ${interval}s interval`);
+    
+    async function runSync() {
+        try {
+            await module.exports.updateKeys({
+                keysPath: process.env.DIRECTORY_KEYS_BASE,
+                passwordFile: process.env.PASSWORD_FILE,
+                passwordTemplate: process.env.PASSWORDS_TEMPLATE,
+                accessToken: process.env.GITHUB_ACCESS_TOKEN
+            });
+        } catch (err) {
+            console.error('Key sync error:', err);
+        }
+    }
+
+    // Initial run
+    runSync();
+    
+    // Schedule periodic runs
+    setInterval(runSync, interval * 1000);
 }
