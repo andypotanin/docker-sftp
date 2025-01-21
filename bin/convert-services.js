@@ -10,8 +10,8 @@ function convertToSupervisorConfig(services) {
         supervisordConfig += `[program:${service.name}]\n`;
         supervisordConfig += `command=${service.command}\n`;
         // Handle environment variable interpolation for autostart
-        const autostart = service.autostart.replace(/[${}]/g, '');
-        supervisordConfig += `autostart=true\n`;  // Default to true, controlled by environment
+        const autostart = service.autostart.replace(/\${([^}]+)}/g, '%(ENV_$1)s');
+        supervisordConfig += `autostart=${autostart}\n`;  // Use environment variable
         supervisordConfig += `startsecs=10\n`;    // Wait up to 10 seconds for service to start
         supervisordConfig += `startretries=3\n`;  // Retry 3 times if service fails to start
         supervisordConfig += `autorestart=${service.autorestart}\n`;

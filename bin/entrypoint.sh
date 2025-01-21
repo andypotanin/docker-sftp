@@ -138,8 +138,13 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
+# Export service control variables with defaults
+export SERVICE_ENABLE_SSHD=${SERVICE_ENABLE_SSHD:-true}
+export SERVICE_ENABLE_API=${SERVICE_ENABLE_API:-true}
+
 # Start supervisord
 echo "Starting supervisord..."
+echo "Service control: SSHD=${SERVICE_ENABLE_SSHD}, API=${SERVICE_ENABLE_API}"
 /usr/bin/supervisord -n -c /etc/supervisor/supervisord.conf &
 SUPERVISOR_PID=$!
 
@@ -150,6 +155,10 @@ timeout 30 bash -c 'until supervisorctl status >/dev/null 2>&1; do sleep 1; done
     cat /var/log/supervisor/supervisord.log
     exit 1
 }
+
+# Show service status
+echo "Current service status:"
+supervisorctl status
 
 if [[ "${SERVICE_ENABLE_SSHD}" == "true" ]]; then
     echo "Starting SSHD services..."
@@ -193,37 +202,61 @@ wait $SUPERVISOR_PID
 # Wait for supervisord to be ready
 sleep 2
 
-# Start and verify services based on environment
+# Start services based on environment variables
+echo "Starting services..."
+
+# Start SSHD if enabled
 if [[ "${SERVICE_ENABLE_SSHD}" == "true" ]]; then
-    echo "Starting SSHD services..."
-    supervisorctl start sshd ssh_keys_sync
-    check_service_health sshd || exit 1
-    check_service_health ssh_keys_sync || exit 1
+    echo "Starting SSHD service..."
+    supervisorctl start sshd || { echo "Error starting SSHD service"; exit 1; }
+    sleep 2
+    if ! pgrep sshd > /dev/null; then
+        echo "ERROR: SSHD failed to start"
+        supervisorctl status
+        exit 1
+    fi
+    echo "SSHD started successfully"
+
+    echo "Starting SSH key sync service..."
+    supervisorctl start ssh_keys_sync || { echo "Error starting SSH key sync service"; exit 1; }
+    sleep 2
+    if ! pgrep -f "controller.keys.js" > /dev/null; then
+        echo "ERROR: SSH key sync service failed to start"
+        supervisorctl status
+        exit 1
+    fi
+    echo "SSH key sync service started successfully"
 fi
 
+# Start API if enabled
 if [[ "${SERVICE_ENABLE_API}" == "true" ]]; then
     echo "Starting API service..."
-    supervisorctl start k8gate
-    check_service_health k8gate || exit 1
+    supervisorctl start k8gate || { echo "Error starting API service"; exit 1; }
     
-    # Additional API health check
-    echo "Checking API health..."
+    # Wait for API to be ready
+    echo "Waiting for API to be healthy..."
     retry_count=0
     while [ $retry_count -lt 30 ]; do
-        if curl -sf http://localhost:8080/health > /dev/null; then
+        if curl -sf http://localhost:8080/health > /dev/null 2>&1; then
             echo "API is healthy"
             break
         fi
+        echo "Waiting for API to start... (attempt $((retry_count + 1))/30)"
         retry_count=$((retry_count + 1))
         sleep 1
     done
     
     if [ $retry_count -eq 30 ]; then
         echo "ERROR: API health check failed"
+        supervisorctl status
         curl -v http://localhost:8080/health || true
         exit 1
     fi
 fi
+
+# Show final service status
+echo "Final service status:"
+supervisorctl status
 
 # Monitor logs
 echo "All services started successfully. Starting log monitoring..."
