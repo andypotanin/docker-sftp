@@ -141,10 +141,14 @@ RUN mkdir -p /etc/worker/logs /etc/worker/configs && \
 # Copy and verify service configuration
 COPY --chown=root:root .github/workflows/services.yml /etc/worker/services.yml
 RUN echo "Verifying worker configuration..." && \
-    echo "Configuration location:" && \
+    echo "Worker binary version and location:" && \
+    which worker && worker --version && \
+    echo "\nConfiguration location:" && \
     ls -la /etc/worker/services.yml && \
     echo "\nConfiguration contents:" && \
     cat /etc/worker/services.yml && \
+    echo "\nWorker directory contents:" && \
+    ls -la /etc/worker/ && \
     echo "\nValidating services configuration..." && \
     WORKER_DEBUG=true DEBUG=worker:*,ssh:*,k8gate:* /usr/local/bin/worker validate /etc/worker/services.yml && \
     echo "Worker configuration validated successfully" || {
@@ -157,6 +161,12 @@ RUN echo "Verifying worker configuration..." && \
         WORKER_DEBUG=true /usr/local/bin/worker status --debug || true
         echo "\nEnvironment variables:"
         env | grep -E "WORKER_|SERVICE_|NODE_|DEBUG" || true
+        echo "\nWorker binary permissions:"
+        ls -l /usr/local/bin/worker
+        echo "\nConfiguration file permissions:"
+        ls -l /etc/worker/services.yml
+        echo "\nTrying worker help:"
+        /usr/local/bin/worker --help || true
         exit 1
     }
 
