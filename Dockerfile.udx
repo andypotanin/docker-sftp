@@ -10,7 +10,8 @@ LABEL version="0.9.0" \
 
 # Set environment variables
 ENV NODE_ENV=production \
-    KUBECTL_VERSION=v1.28.3
+    KUBECTL_VERSION=v1.28.3 \
+    PATH="/google-cloud-sdk/bin:${PATH}"
 
 # Install system dependencies
 RUN apk update && \
@@ -22,10 +23,20 @@ RUN apk update && \
         curl \
         bash \
         git \
-        sudo
+        sudo \
+        python3-dev \
+        gcc \
+        musl-dev \
+        libffi-dev \
+        openssl-dev \
+        cargo
 
 # Install Google Cloud SDK
-RUN python3 -m pip install --no-cache-dir google-cloud-cli && \
+RUN curl -O https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-455.0.0-linux-x86_64.tar.gz && \
+    tar -xf google-cloud-cli-455.0.0-linux-x86_64.tar.gz && \
+    rm google-cloud-cli-455.0.0-linux-x86_64.tar.gz && \
+    ./google-cloud-sdk/install.sh --quiet --path-update=false --command-completion=false --usage-reporting=false && \
+    ln -s /google-cloud-sdk/bin/gcloud /usr/local/bin/gcloud && \
     gcloud --version
 
 # Install kubectl
