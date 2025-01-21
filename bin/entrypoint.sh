@@ -78,11 +78,8 @@ export USER=udx
 export DEBUG=ssh*,sftp*,k8gate*,express*
 export NODE_ENV=production
 export NODE_PORT=8080
-
-# Set up environment variables
 export SERVICE_ENABLE_SSHD=${SERVICE_ENABLE_SSHD:-true}
 export SERVICE_ENABLE_API=${SERVICE_ENABLE_API:-true}
-export NODE_ENV=${NODE_ENV:-production}
 
 # Function to check service health
 check_service_health() {
@@ -110,14 +107,15 @@ mkdir -p /var/run/supervisor /var/log/supervisor /etc/supervisor/conf.d
 chmod 755 /var/run/supervisor /var/log/supervisor /etc/supervisor/conf.d
 chown -R root:root /etc/supervisor/
 
-# Convert services configuration
-echo "Converting services configuration..."
+# Set up supervisord configuration
+echo "Setting up supervisord configuration..."
 
-# Ensure directories exist
-mkdir -p /etc/worker /etc/supervisor/conf.d
-chmod 755 /etc/worker /etc/supervisor/conf.d
+# Create required directories
+mkdir -p /etc/worker /etc/supervisor/conf.d /var/log/supervisor /var/run
+chmod 755 /etc/worker /etc/supervisor/conf.d /var/log/supervisor /var/run
+chown root:root /etc/supervisor
 
-# Verify services.yml exists
+# Verify services.yml exists and is readable
 if [ ! -f "/etc/worker/services.yml" ]; then
     echo "Error: /etc/worker/services.yml not found"
     ls -la /etc/worker/
@@ -175,6 +173,18 @@ fi
 # Start supervisord
 echo "Starting supervisord..."
 echo "Service control: SSHD=${SERVICE_ENABLE_SSHD}, API=${SERVICE_ENABLE_API}"
+
+# Verify supervisord configuration before starting
+echo "Verifying supervisord configuration..."
+/usr/bin/supervisord -c /etc/supervisor/supervisord.conf -t
+if [ $? -ne 0 ]; then
+    echo "Error: Invalid supervisord configuration"
+    cat /etc/supervisor/supervisord.conf
+    cat /etc/supervisor/conf.d/services.conf
+    exit 1
+fi
+
+# Start supervisord with proper configuration
 /usr/bin/supervisord -c /etc/supervisor/supervisord.conf
 
 # Wait for supervisord to be ready
