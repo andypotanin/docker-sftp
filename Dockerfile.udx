@@ -1,16 +1,7 @@
 # Docker SFTP Gateway
 # This Dockerfile builds a container that provides SFTP access to Kubernetes pods
-#
-# Base Image: usabilitydynamics/udx-worker-nodejs
-# The base image already provides:
-# - Node.js environment
-# - Google Cloud SDK
-# - AWS CLI
-# - Azure CLI
-# - Common utilities
-# - Non-root user (udx:udx, UID:500, GID:500)
 
-FROM usabilitydynamics/udx-worker-nodejs:latest
+FROM node:23.5-alpine
 
 LABEL maintainer="UDX Team <team@usabilitydynamics.com>" \
       org.opencontainers.image.source="https://github.com/usabilitydynamics/docker-sftp" \
@@ -19,6 +10,21 @@ LABEL maintainer="UDX Team <team@usabilitydynamics.com>" \
 
 # Build arguments
 ARG KUBECTL_VERSION=v1.29.0
+ARG VERSION
+
+# Install system dependencies
+RUN apk add --no-cache \
+    openssh \
+    openssh-server \
+    python3 \
+    py3-pip \
+    curl \
+    bash \
+    git \
+    && pip3 install --no-cache-dir google-cloud-sdk \
+    && curl -LO "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl" \
+    && chmod +x kubectl \
+    && mv kubectl /usr/local/bin/
 
 # Set environment variables
 ENV SERVICE_ENABLE_SSHD=true \
@@ -31,15 +37,8 @@ ENV SERVICE_ENABLE_SSHD=true \
 # Switch to root for system setup
 USER root
 
-# Install OpenSSH server and other required packages
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    openssh-server \
-    openssh-sftp-server \
-    netcat-traditional \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/* \
-    # Create required directories
-    && mkdir -p \
+# Create required directories
+RUN mkdir -p \
         /home/udx/.kube \
         /etc/ssh \
         /etc/ssh/authorized_keys.d \
