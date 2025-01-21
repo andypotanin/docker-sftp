@@ -7,23 +7,6 @@ services:
     autostart: ${SERVICE_ENABLE_SSHD}
     
   - name: k8gate
-    command: /opt/sources/rabbitci/rabbit-ssh/bin/server.js
-    autostart: ${SERVICE_ENABLE_API}
-    
-  - name: ssh-keys-sync
-    command: /opt/sources/rabbitci/rabbit-ssh/bin/controller.keys.js
-    autostart: ${SERVICE_ENABLE_SSHD}
-    interval: 300
-    autorestart: true
-    user: root
-    envs:
-      - DEBUG=ssh:*,auth:*
-      - HOME=/root
-    # max_restarts: 50
-    # restart_delay: 10000
-    # log_date_format: YYYY-MM-DD HH:mm Z
-    
-  - name: k8gate
     command: node /opt/sources/rabbitci/rabbit-ssh/bin/server.js 2>&1 | tee -a /var/log/k8gate.log
     autostart: ${SERVICE_ENABLE_API}
     autorestart: true
@@ -45,8 +28,6 @@ services:
         timeout: 3s
         retries: 2
     
-  # Firebase events service removed
-
   - name: ssh-keys-sync
     command: node /opt/sources/rabbitci/rabbit-ssh/bin/controller.keys.js 2>&1 | tee -a /var/log/ssh-keys-sync.log
     autostart: ${SERVICE_ENABLE_SSHD}
