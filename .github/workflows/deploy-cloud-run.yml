@@ -1,135 +1,70 @@
-name: Deploy to Cloud Run
+name: 🚀 Deploy to Cloud Run
+
+# Purpose: Deploys the container to Google Cloud Run
+# Trigger: On successful Docker build or manual dispatch
+# Output: Running service on Cloud Run with proper configuration
 
 on:
-  # Manual deployment only
+  workflow_run:
+    workflows: ["🐳 Docker Image Builder"]
+    types:
+      - completed
+    branches:
+      - master
   workflow_dispatch:
-    inputs:
-      tag:
-        description: 'Docker image tag to deploy'
-        required: true
-        default: 'latest'
 
 env:
-  CLOUD_RUN_PROJECT_ID: destinationpickleball-com-8173
-  K8S_PROJECT_ID: rabbit-ci
+  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  SERVICE_NAME: k8-container-gate
   REGION: us-central1
-  SERVICE_NAME: sftp-api
-  K8S_CLUSTER: rabbit-ci-cluster
-  K8S_LOCATION: us-central1-a
 
 jobs:
   deploy:
+    name: 🌩️ Deploy to Cloud Run
     runs-on: ubuntu-latest
-    
-    # Add permissions needed for auth
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
+
     permissions:
       contents: 'read'
       id-token: 'write'
-    
+
     steps:
-    - uses: actions/checkout@v4
-    
-    - name: Google Auth
-      id: auth
-      uses: 'google-github-actions/auth@v2'
-      with:
-        workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-        service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
-        token_format: access_token
-        access_token_lifetime: 3600s
-        create_credentials_file: true
-        export_environment_variables: true
-        cleanup_credentials: true
-        access_token_scopes: |
-          https://www.googleapis.com/auth/cloud-platform
-          https://www.googleapis.com/auth/cloudrun
-        
-    - name: Set up Cloud SDK
-      uses: 'google-github-actions/setup-gcloud@v2'
-      with:
-        version: '>= 363.0.0'
-        project_id: ${{ env.CLOUD_RUN_PROJECT_ID }}
+      - name: 🔑 Google Auth
+        id: auth
+        uses: google-github-actions/auth@v1
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
 
-    - name: Get GKE credentials
-      env:
-        GKE_CLUSTER: ${{ secrets.GKE_CLUSTER_NAME }}
-        GKE_LOCATION: ${{ secrets.GKE_CLUSTER_LOCATION }}
-      run: |
-        gcloud container clusters get-credentials ${GKE_CLUSTER} \
-          --zone ${GKE_LOCATION} \
-          --project ${{ env.K8S_PROJECT_ID }}
-        kubectl config view --minify --flatten > k8s-config.yaml
-          
-    - name: Create K8s Secret
-      run: |
-        echo "${{ secrets.GKE_SA_KEY }}" > k8s-sa-key.json
-        kubectl create secret generic k8s-sa-key \
-          --from-file=key.json=k8s-sa-key.json \
-          --dry-run=client -o yaml > k8s-secret.yaml
+      - name: 🔧 Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+        with:
+          version: '>= 363.0.0'
 
-    - name: Configure Docker for GCR
-      run: |
-        gcloud auth configure-docker gcr.io
-        
-    - name: Copy image to GCR
-      env:
-        REGISTRY: usabilitydynamics
-        IMAGE_NAME: k8-container-gate
-        GCR_HOSTNAME: gcr.io
-      run: |
-        # Pull from Docker Hub
-        docker pull ${REGISTRY}/${IMAGE_NAME}:${{ github.event.inputs.tag }}
-        
-        # Tag for GCR
-        docker tag ${REGISTRY}/${IMAGE_NAME}:${{ github.event.inputs.tag }} \
-          ${GCR_HOSTNAME}/${{ env.CLOUD_RUN_PROJECT_ID }}/${IMAGE_NAME}:${{ github.event.inputs.tag }}
-        
-        # Push to GCR
-        docker push ${GCR_HOSTNAME}/${{ env.CLOUD_RUN_PROJECT_ID }}/${IMAGE_NAME}:${{ github.event.inputs.tag }}
+      - name: 🚀 Deploy to Cloud Run
+        id: deploy
+        uses: google-github-actions/deploy-cloudrun@v1
+        with:
+          service: ${{ env.SERVICE_NAME }}
+          region: ${{ env.REGION }}
+          image: usabilitydynamics/k8-container-gate:latest
+          flags: |
+            --port=3000
+            --memory=512Mi
+            --cpu=1
+            --min-instances=0
+            --max-instances=10
+            --execution-environment=gen2
+            --ingress=internal-and-cloud-load-balancing
+            --session-affinity
+            --set-env-vars=SERVICE_ENABLE_API=true,SERVICE_ENABLE_SSHD=true
+            --set-env-vars=K8S_CLUSTER=${{ secrets.GKE_CLUSTER_NAME }}
+            --set-env-vars=K8S_PROJECT_ID=${{ secrets.GCP_PROJECT_ID }}
+            --set-env-vars=K8S_LOCATION=${{ secrets.GKE_CLUSTER_LOCATION }}
+            --set-env-vars=K8S_NAMESPACE=${{ secrets.KUBERNETES_CLUSTER_NAMESPACE }}
+            --set-env-vars=ALLOW_SSH_ACCESS_ROLES=admin
+            --service-account=${{ secrets.K8S_SERVICE_ACCOUNT }}
+            --tag=v0-9-0
 
-    - name: Generate Cloud Run Config
-      env:
-        DOCKER_REGISTRY: gcr.io/${{ env.CLOUD_RUN_PROJECT_ID }}
-        IMAGE_NAME: k8-container-gate
-        IMAGE_TAG: ${{ github.event.inputs.tag }}
-        GCP_SERVICE_ACCOUNT: ${{ secrets.CLOUD_RUN_SERVICE_ACCOUNT }}
-        GITHUB_TOKEN_SECRET_NAME: github-access-token
-      run: |
-        # Replace variables in cloud-run.yml
-        envsubst < src/configs/cloud-run.yml > /tmp/cloud-run-config.yml
-    
-    - name: Deploy to Cloud Run
-      id: deploy
-      uses: google-github-actions/deploy-cloudrun@v2
-      with:
-        service: ${{ env.SERVICE_NAME }}
-        region: ${{ env.REGION }}
-        image: docker.io/usabilitydynamics/k8-container-gate:${{ github.event.inputs.tag }}
-        flags: |
-          --port=8080
-          --allow-unauthenticated
-          --min-instances=1
-          --max-instances=10
-          --cpu=1
-          --memory=1Gi
-          --vpc-connector=vpc-connector
-          --vpc-egress=all-traffic
-        secrets: |
-          K8S_CONFIG=k8s-config.yaml:latest
-          K8S_SA_KEY=k8s-sa-key.json:latest
-        env-vars: |
-          SERVICE_ENABLE_API=true
-          SERVICE_ENABLE_SSHD=false
-          K8S_CLUSTER=${{ secrets.GKE_CLUSTER_NAME }}
-          K8S_PROJECT_ID=${{ env.K8S_PROJECT_ID }}
-          K8S_LOCATION=${{ secrets.GKE_CLUSTER_LOCATION }}
-          K8S_NAMESPACE=${{ secrets.KUBERNETES_CLUSTER_NAMESPACE }}
-
-    - name: Clean up sensitive files
-      if: always()
-      run: |
-        rm -f k8s-config.yaml k8s-sa-key.json k8s-secret.yaml
-
-    - name: Show Output
-      run: |
-        echo "Deployed to ${{ steps.deploy.outputs.url }}"
+      - name: 📝 Show Output
+        run: echo ${{ steps.deploy.outputs.url }}

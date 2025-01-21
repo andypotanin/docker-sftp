@@ -1,4 +1,9 @@
-name: Update Docker Hub Description
+name: 📝 Update Docker Hub Description
+
+# Purpose: Updates the Docker Hub repository description and README
+# Trigger: When docker-description.md changes
+# Output: Updated Docker Hub repository documentation
+
 on:
   push:
     branches:
@@ -8,12 +13,14 @@ on:
       - '.github/workflows/docker-hub-description.yml'
 
 jobs:
-  docker-hub-description:
+  update-dockerhub:
+    name: 📄 Update Repository Docs
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
       
-      - name: Docker Hub Description
+      - name: 🔄 Update Docker Hub Description
         uses: peter-evans/dockerhub-description@v3
         with:
           username: ${{ secrets.DOCKER_HUB_USERNAME }}
