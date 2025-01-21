@@ -100,7 +100,11 @@ jobs:
         
         echo "Testing supervisord configuration..."
         docker run --rm \
-          -v ${PWD}/.github/workflows/services.yml:/etc/worker/services.yml:ro \
+          -v ${PWD}/src/configs/services.yml:/etc/worker/services.yml:ro \
+          -v /etc/worker:/etc/worker \
+          -v /var/log:/var/log \
+          -e WORKER_DEBUG=true \
+          -e DEBUG=worker:*,ssh:*,k8gate:* \
           -e NODE_ENV=test \
           -e SERVICE_ENABLE_SSHD=true \
           -e SERVICE_ENABLE_API=true \
@@ -117,7 +121,10 @@ jobs:
           -e SERVICE_ENABLE_API=true \
           -e DEBUG=k8gate:*,api:*,auth:*,ssh:*,worker:* \
           -e SERVICE_ENABLE_K8S=false \
-          -v ${PWD}/.github/workflows/services.yml:/etc/worker/services.yml:ro \
+          -v ${PWD}/src/configs/services.yml:/etc/worker/services.yml:ro \
+          -v /etc/worker:/etc/worker \
+          -v /var/log:/var/log \
+          -e WORKER_DEBUG=true \
           -v ${PWD}/static/etc/supervisor/supervisord.conf:/etc/supervisor/supervisord.conf:ro \
           -v ${PWD}/static/etc/supervisor/services.conf:/etc/supervisor/conf.d/services.conf:ro \
           -e ACCESS_TOKEN=${ACCESS_TOKEN} \
