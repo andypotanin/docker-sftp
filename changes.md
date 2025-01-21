@@ -1,3 +1,13 @@
+### 0.9.0
+* Renamed Docker image to usabilitydynamics/k8-container-gate
+* Added multi-platform Docker builds (AMD64, ARM64)
+* Enhanced Cloud Run integration with K8s connectivity
+* Updated GitHub Actions workflows for better CI/CD
+* Added VPC connector support for private networking
+* Improved documentation with architecture diagrams
+* Separated API and SFTP components for scalability
+* Fixed Docker build workflow and secret handling
+
 ### 0.7.1
 * Added multi-provider support (Kubernetes, Firebase, local state providers)
 * Added Azure Kubernetes Service (AKS) deployment support
