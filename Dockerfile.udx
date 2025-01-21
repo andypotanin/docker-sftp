@@ -95,15 +95,24 @@ RUN mkdir -p /etc/supervisor/conf.d /var/log/supervisor /var/run /etc/worker && 
     chmod 700 /var/run/supervisor.sock && \
     chown -R root:root /etc/supervisor
 
-# Copy supervisord and services configuration
+# Copy supervisord configuration
 COPY --chown=root:root static/etc/supervisor/supervisord.conf /etc/supervisor/supervisord.conf
+COPY --chown=root:root static/etc/supervisor/services.conf /etc/supervisor/conf.d/services.conf
+
+# Copy services configuration
 COPY --chown=root:root .github/workflows/services.yml /etc/worker/services.yml
 
 # Set correct permissions and verify files
-RUN chmod 644 /etc/supervisor/supervisord.conf /etc/worker/services.yml && \
-    ls -la /etc/supervisor/supervisord.conf /etc/worker/services.yml && \
-    echo "Verifying services.yml content:" && \
-    cat /etc/worker/services.yml
+RUN chmod 644 /etc/supervisor/supervisord.conf /etc/supervisor/conf.d/services.conf /etc/worker/services.yml && \
+    chown root:root /etc/supervisor/supervisord.conf /etc/supervisor/conf.d/services.conf /etc/worker/services.yml && \
+    echo "Verifying configuration files:" && \
+    ls -la /etc/supervisor/supervisord.conf /etc/supervisor/conf.d/services.conf /etc/worker/services.yml && \
+    echo "Services.yml content:" && \
+    cat /etc/worker/services.yml && \
+    echo "Supervisord config:" && \
+    cat /etc/supervisor/supervisord.conf && \
+    echo "Services config:" && \
+    cat /etc/supervisor/conf.d/services.conf
 
 # Set up services configuration and convert to supervisord format
 RUN npm install -g js-yaml && \
