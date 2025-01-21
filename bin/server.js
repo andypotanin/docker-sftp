@@ -43,6 +43,9 @@ process.on('SIGTERM', () => {
     }
 });
 
+// Initialize server variable
+let server;
+
 // Start the gateway with environment-based configuration
 startGateway({
     keysPath: process.env.DIRECTORY_KEYS_BASE || '/etc/ssh/authorized_keys.d',

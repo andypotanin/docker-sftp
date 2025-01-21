@@ -41,7 +41,7 @@ const allowedRolesForProd = process.env.ALLOW_SSH_ACCES_PROD_ROLES || 'admin';
 module.exports.updateKeys = async function updateKeys(options, taskCallback) {
     // Set default callback if not provided
     taskCallback = typeof taskCallback === 'function' ? taskCallback : async () => {
-        if (process.env.SLACK_NOTIFICACTION_URL?.startsWith('https')) {
+        if (process.env.SLACK_NOTIFICACTION_URL && process.env.SLACK_NOTIFICACTION_URL.startsWith('https')) {
             try {
                 await axios.post(process.env.SLACK_NOTIFICACTION_URL, {
                     channel: process.env.SLACK_NOTIFICACTION_CHANNEL,
