@@ -70,54 +70,37 @@ jobs:
         sudo cp /tmp/test_key.pub /etc/ssh/authorized_keys.d/test-user
         sudo chmod 644 /etc/ssh/authorized_keys.d/test-user
 
-        # Set up worker configuration with proper permissions
-        echo "Setting up worker configuration..."
-        sudo rm -rf /etc/worker
-        sudo mkdir -p /etc/worker/{configs,logs}
-        sudo cp .github/workflows/services.yml /etc/worker/services.yml
-        sudo cp .github/workflows/services.yml /etc/worker/configs/services.yml
-        sudo chmod 755 /etc/worker /etc/worker/configs /etc/worker/logs
-        sudo chmod 644 /etc/worker/services.yml /etc/worker/configs/services.yml
-        sudo chown -R root:root /etc/worker
+        # Set up supervisord configuration
+        echo "Setting up supervisord configuration..."
+        sudo mkdir -p /etc/supervisor/conf.d /var/log/supervisor
+        sudo cp static/etc/supervisor/services.conf /etc/supervisor/conf.d/
+        sudo chmod 755 /etc/supervisor/conf.d
+        sudo chmod 644 /etc/supervisor/conf.d/services.conf
+        sudo chown -R root:root /etc/supervisor
         
-        echo "Worker configuration contents:"
-        cat /etc/worker/services.yml
+        # Create and set up log files
+        sudo mkdir -p /var/log/{supervisor,sshd,k8gate}
+        sudo touch /var/log/{supervisor/supervisord,sshd,k8gate,ssh-keys-sync,auth}.log
+        sudo chown -R udx:udx /var/log/{sshd,k8gate,ssh-keys-sync,auth}.log
+        sudo chmod 644 /var/log/{sshd,k8gate,ssh-keys-sync,auth}.log
         
-        echo "Worker directory structure:"
-        ls -la /etc/worker/
-        ls -la /etc/worker/configs/
+        echo "Supervisord configuration contents:"
+        cat /etc/supervisor/conf.d/services.conf
         
-        echo "Worker configuration contents and permissions:"
-        ls -la /etc/worker/
-        cat /etc/worker/services.yml
+        echo "Log directory structure:"
+        ls -la /var/log/
         
-        echo "Testing worker configuration validation..."
+        echo "Testing supervisord configuration..."
         docker run --rm \
-          -v /etc/worker:/etc/worker:ro \
-          -e WORKER_DEBUG=true \
-          -e DEBUG=worker:*,ssh:*,k8gate:* \
-          sftp-gateway:${{ steps.version.outputs.TAG }} \
-          worker validate /etc/worker/services.yml --debug
-        
-        echo "Worker configuration contents:"
-        cat /etc/worker/services.yml
-        echo "Configuration permissions:"
-        ls -la /etc/worker/services.yml
-
-        # Verify worker binary and configuration
-        echo "Testing worker binary..."
-        docker run --rm sftp-gateway:${{ steps.version.outputs.TAG }} worker --version
-
-        echo "Testing worker configuration validation..."
-        docker run --rm \
-          -v /etc/worker:/etc/worker:ro \
-          -e WORKER_DEBUG=true \
-          -e DEBUG=worker:*,ssh:*,k8gate:* \
+          -v /etc/supervisor:/etc/supervisor:ro \
+          -v /var/log:/var/log \
           -e NODE_ENV=test \
           -e SERVICE_ENABLE_SSHD=true \
           -e SERVICE_ENABLE_API=true \
-          -e STATE_PROVIDER=local \
-          sftp-gateway:${{ steps.version.outputs.TAG }} worker validate /etc/worker/services.yml
+          sftp-gateway:${{ steps.version.outputs.TAG }} \
+          supervisord -c /etc/supervisor/supervisord.conf -n -t
+
+        # Create test container with proper mounts and environment
         
         # Create test container with proper mounts
         docker create --name test-container \
@@ -127,10 +110,7 @@ jobs:
           -e SERVICE_ENABLE_API=true \
           -e DEBUG=k8gate:*,api:*,auth:*,ssh:*,worker:* \
           -e SERVICE_ENABLE_K8S=false \
-          -e WORKER_DEBUG=true \
-          -e WORKER_CONFIG_DIR=/etc/worker \
-          -e WORKER_CONFIG_FILE=/etc/worker/services.yml \
-          -v /etc/worker:/etc/worker:ro \
+          -v /etc/supervisor:/etc/supervisor:ro \
           -e ACCESS_TOKEN=${ACCESS_TOKEN} \
           -e KUBERNETES_CLUSTER_ENDPOINT=${KUBERNETES_CLUSTER_ENDPOINT} \
           -e KUBERNETES_CLUSTER_NAME=${KUBERNETES_CLUSTER_NAME} \
@@ -155,19 +135,17 @@ jobs:
         echo "Starting container with worker configuration..."
         docker start test-container
         
-        # Verify worker configuration
-        echo "Verifying worker configuration in container..."
+        # Verify supervisord configuration
+        echo "Verifying supervisord configuration in container..."
         docker exec test-container sh -c '
-          echo "Worker binary version:"
-          worker --version
-          echo "\nWorker configuration files:"
-          ls -la /etc/worker/
-          echo "\nServices configuration:"
-          cat /etc/worker/services.yml
+          echo "Supervisord version:"
+          supervisord --version
+          echo "\nSupervisord configuration:"
+          ls -la /etc/supervisor/conf.d/
+          cat /etc/supervisor/conf.d/services.conf
           echo "\nValidating configuration:"
-          worker validate /etc/worker/services.yml --debug
+          supervisord -c /etc/supervisor/supervisord.conf -n -t
         '
-        docker start test-container
         
         # Wait for container to start and show logs
         sleep 5
@@ -196,38 +174,76 @@ jobs:
           test -f /etc/ssh/authorized_keys.d/test-user || exit 1
           test "$(stat -c %a /etc/ssh/authorized_keys.d/test-user)" = "644" || exit 1
 
-          # Verify worker configuration
-          echo "Worker configuration:"
-          ls -la /etc/worker/
-          cat /etc/worker/services.yml
+          # Verify supervisord configuration
+          echo "Supervisord configuration:"
+          ls -la /etc/supervisor/conf.d/
+          cat /etc/supervisor/conf.d/services.conf
           
-          # Test worker binary
-          echo "Testing worker binary..."
-          worker --version
-          worker validate /etc/worker/services.yml || exit 1
+          # Test supervisord configuration
+          echo "Testing supervisord configuration..."
+          supervisord -c /etc/supervisor/supervisord.conf -n -t || exit 1
           
           # Check service status
           echo "Service status:"
-          worker status --debug || exit 1
+          supervisorctl status || exit 1
           
-          # Verify worker configuration
-          test -d /etc/worker || exit 1
-          test -f /etc/worker/services.yml || exit 1
-          test "$(stat -c %a /etc/worker)" = "755" || exit 1
-          test "$(stat -c %a /etc/worker/services.yml)" = "644" || exit 1
+          # Verify supervisord configuration
+          test -d /etc/supervisor/conf.d || exit 1
+          test -f /etc/supervisor/conf.d/services.conf || exit 1
+          test "$(stat -c %a /etc/supervisor/conf.d)" = "755" || exit 1
+          test "$(stat -c %a /etc/supervisor/conf.d/services.conf)" = "644" || exit 1
           
-          # Verify services are running
-          pgrep -f "/usr/sbin/sshd -D" || exit 1
-          pgrep -f "node.*server.js" || exit 1
-          pgrep -f "controller.keys.js" || exit 1
+          # Verify services are running using supervisorctl
+          supervisorctl status sshd | grep -q "RUNNING" || {
+            echo "ERROR: SSHD service not running"
+            supervisorctl status
+            exit 1
+          }
           
-          # Check service logs exist
-          test -f /var/log/sshd.log || exit 1
-          test -f /var/log/k8gate.log || exit 1
-          test -f /var/log/ssh-keys-sync.log || exit 1
+          supervisorctl status k8gate | grep -q "RUNNING" || {
+            echo "ERROR: K8Gate API service not running"
+            supervisorctl status
+            exit 1
+          }
+          
+          supervisorctl status ssh_keys_sync | grep -q "RUNNING" || {
+            echo "ERROR: SSH key sync service not running"
+            supervisorctl status
+            exit 1
+          }
+          
+          # Check service logs exist and have proper permissions
+          for log_file in sshd k8gate ssh-keys-sync; do
+            test -f "/var/log/${log_file}.log" || {
+              echo "ERROR: ${log_file} log file missing"
+              ls -la /var/log/
+              exit 1
+            }
+            test "$(stat -c %a /var/log/${log_file}.log)" = "644" || {
+              echo "ERROR: ${log_file} log has wrong permissions"
+              ls -la "/var/log/${log_file}.log"
+              exit 1
+            }
+          done
           
           # Check API health endpoint
-          curl -sf http://localhost:8080/health || exit 1
+          curl -sf http://localhost:8080/health || {
+            echo "ERROR: API health check failed"
+            curl -v http://localhost:8080/health || true
+            exit 1
+          }
+          
+          # Verify process ownership
+          ps aux | grep "/usr/sbin/sshd -D" | grep -q "^root" || {
+            echo "ERROR: SSHD not running as root"
+            ps aux | grep sshd
+            exit 1
+          }
+          ps aux | grep "node.*server.js\|controller.keys.js" | grep -q "^udx" || {
+            echo "ERROR: Node.js processes not running as udx user"
+            ps aux | grep "node"
+            exit 1
+          }
         ' || exit 1
         
         # Cleanup
