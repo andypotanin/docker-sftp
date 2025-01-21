@@ -103,18 +103,11 @@ check_service_health() {
     return 1
 }
 
-# Start supervisord
-echo "Starting supervisord..."
-echo "Supervisord configuration:"
-cat /etc/supervisor/supervisord.conf
-echo "Services configuration:"
-cat /etc/supervisor/conf.d/services.conf
+# Create required directories
+mkdir -p /var/run/supervisor /var/log/supervisor /etc/supervisor/conf.d
+chmod 755 /var/run/supervisor /var/log/supervisor /etc/supervisor/conf.d
 
-# Ensure required directories exist
-mkdir -p /etc/supervisor/conf.d /var/log/supervisor
-chmod 755 /etc/supervisor/conf.d /var/log/supervisor
-
-# Convert mounted services configuration
+# Convert services configuration
 echo "Converting services configuration..."
 if [ ! -f /etc/worker/services.yml ]; then
     echo "Error: /etc/worker/services.yml not found"
@@ -126,27 +119,10 @@ echo "Services configuration input:"
 cat /etc/worker/services.yml
 
 echo "Converting services.yml to supervisord format..."
-echo "Verifying services.yml exists and is readable..."
-if [ ! -f /etc/worker/services.yml ]; then
-    echo "Error: /etc/worker/services.yml not found"
-    ls -la /etc/worker/
-    exit 1
-fi
-
-echo "Content of /etc/worker/services.yml:"
-cat /etc/worker/services.yml
-
-echo "Running convert-services script..."
-/usr/local/bin/convert-services /etc/worker/services.yml /etc/supervisor/conf.d/services.conf
-CONVERT_EXIT=$?
-
-echo "Convert script exit code: $CONVERT_EXIT"
-if [ $CONVERT_EXIT -ne 0 ]; then
+/usr/local/bin/convert-services.js /etc/worker/services.yml /etc/supervisor/conf.d/services.conf
+if [ $? -ne 0 ]; then
     echo "Error: Failed to convert services configuration"
-    echo "convert-services script content:"
-    cat /usr/local/bin/convert-services
-    echo "Node.js version:"
-    node --version
+    echo "Node.js version: $(node --version)"
     echo "Installed packages:"
     npm list -g
     exit 1
@@ -155,15 +131,13 @@ fi
 echo "Generated supervisord configuration:"
 cat /etc/supervisor/conf.d/services.conf
 
+# Verify supervisord configuration
 echo "Verifying supervisord configuration..."
 supervisord -c /etc/supervisor/supervisord.conf -t
 if [ $? -ne 0 ]; then
     echo "Error: Invalid supervisord configuration"
     exit 1
 fi
-
-echo "Generated supervisord configuration:"
-cat /etc/supervisor/conf.d/services.conf
 
 # Export service control variables with defaults
 export SERVICE_ENABLE_SSHD=${SERVICE_ENABLE_SSHD:-true}
@@ -172,36 +146,57 @@ export SERVICE_ENABLE_API=${SERVICE_ENABLE_API:-true}
 # Start supervisord
 echo "Starting supervisord..."
 echo "Service control: SSHD=${SERVICE_ENABLE_SSHD}, API=${SERVICE_ENABLE_API}"
+/usr/bin/supervisord -c /etc/supervisor/supervisord.conf
 
-# Start supervisord in the foreground
-exec /usr/bin/supervisord -n -c /etc/supervisor/supervisord.conf
+# Wait for supervisord to be ready
+echo "Waiting for supervisord to be ready..."
+retry_count=0
+while [ $retry_count -lt 30 ]; do
+    if supervisorctl status >/dev/null 2>&1; then
+        echo "Supervisord is ready"
+        break
+    fi
+    retry_count=$((retry_count + 1))
+    sleep 1
+done
 
-# Show service status
-echo "Current service status:"
-supervisorctl status
+if [ $retry_count -eq 30 ]; then
+    echo "Error: Supervisord failed to start"
+    exit 1
+fi
 
+# Start and verify services
 if [[ "${SERVICE_ENABLE_SSHD}" == "true" ]]; then
     echo "Starting SSHD services..."
     supervisorctl start sshd ssh_keys_sync || { echo "Error starting SSHD services"; exit 1; }
-    
-    # Verify SSHD is running
-    timeout 30 bash -c 'until supervisorctl status sshd | grep -q "RUNNING"; do sleep 1; done' || { 
-        echo "Error: SSHD failed to start"
-        supervisorctl status
-        exit 1
-    }
+    check_service_health sshd || exit 1
+    check_service_health ssh_keys_sync || exit 1
 fi
 
 if [[ "${SERVICE_ENABLE_API}" == "true" ]]; then
     echo "Starting API service..."
     supervisorctl start k8gate || { echo "Error starting API service"; exit 1; }
+    check_service_health k8gate || exit 1
     
-    # Verify API is running
-    timeout 30 bash -c 'until supervisorctl status k8gate | grep -q "RUNNING"; do sleep 1; done' || {
-        echo "Error: API service failed to start"
-        supervisorctl status
+    # Additional API health check
+    echo "Checking API health..."
+    retry_count=0
+    while [ $retry_count -lt 30 ]; do
+        if curl -sf http://localhost:8080/health > /dev/null; then
+            echo "API is healthy"
+            break
+        fi
+        echo "Waiting for API to start... (attempt $((retry_count + 1))/30)"
+        retry_count=$((retry_count + 1))
+        sleep 1
+    done
+    
+    if [ $retry_count -eq 30 ]; then
+        echo "ERROR: API health check failed"
+        curl -v http://localhost:8080/health || true
         exit 1
-    }
+    fi
+fi
     
     # Additional API health check
     echo "Checking API health..."
