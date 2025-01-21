@@ -105,7 +105,60 @@ check_service_health() {
 
 # Start supervisord
 echo "Starting supervisord..."
-/usr/bin/supervisord -c /etc/supervisor/supervisord.conf
+echo "Supervisord configuration:"
+cat /etc/supervisor/supervisord.conf
+echo "Services configuration:"
+cat /etc/supervisor/conf.d/services.conf
+
+# Start supervisord in foreground
+/usr/bin/supervisord -n -c /etc/supervisor/supervisord.conf &
+SUPERVISOR_PID=$!
+
+# Wait for supervisord to be ready
+sleep 2
+
+# Start and verify services
+echo "Starting services..."
+supervisorctl status || { echo "Error: supervisord not responding"; exit 1; }
+
+if [[ "${SERVICE_ENABLE_SSHD}" == "true" ]]; then
+    echo "Starting SSHD services..."
+    supervisorctl start sshd ssh_keys_sync || { echo "Error starting SSHD services"; exit 1; }
+    
+    # Verify SSHD is running
+    timeout 30 bash -c 'until supervisorctl status sshd | grep -q "RUNNING"; do sleep 1; done' || { 
+        echo "Error: SSHD failed to start"
+        supervisorctl status
+        exit 1
+    }
+fi
+
+if [[ "${SERVICE_ENABLE_API}" == "true" ]]; then
+    echo "Starting API service..."
+    supervisorctl start k8gate || { echo "Error starting API service"; exit 1; }
+    
+    # Verify API is running
+    timeout 30 bash -c 'until supervisorctl status k8gate | grep -q "RUNNING"; do sleep 1; done' || {
+        echo "Error: API service failed to start"
+        supervisorctl status
+        exit 1
+    }
+    
+    # Additional API health check
+    echo "Checking API health..."
+    timeout 30 bash -c 'until curl -sf http://localhost:8080/health > /dev/null; do sleep 1; done' || {
+        echo "Error: API health check failed"
+        curl -v http://localhost:8080/health || true
+        exit 1
+    }
+fi
+
+# Monitor logs and keep container running
+echo "All services started successfully. Monitoring logs..."
+tail -F /var/log/{sshd,k8gate,ssh-keys-sync,auth}.log | grep --line-buffered -E "error|warn|debug|info|ERROR|WARN|DEBUG|INFO" &
+
+# Wait for supervisord
+wait $SUPERVISOR_PID
 
 # Wait for supervisord to be ready
 sleep 2
