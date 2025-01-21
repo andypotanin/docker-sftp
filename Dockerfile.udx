@@ -1,5 +1,7 @@
 # Docker SFTP Gateway
 # This Dockerfile builds a container that provides SFTP access to Kubernetes pods
+#
+# Base Image: node:23.5-alpine
 
 FROM node:23.5-alpine
 
@@ -10,34 +12,18 @@ LABEL version="0.9.0" \
 
 # Set environment variables
 ENV NODE_ENV=production \
-    KUBECTL_VERSION=v1.28.3 \
-    PATH="/google-cloud-sdk/bin:${PATH}"
+    KUBECTL_VERSION=v1.28.3
 
 # Install system dependencies
 RUN apk update && \
     apk add --no-cache \
         openssh \
         openssh-server \
-        python3 \
-        py3-pip \
         curl \
         bash \
         git \
         sudo \
-        python3-dev \
-        gcc \
-        musl-dev \
-        libffi-dev \
-        openssl-dev \
-        cargo
-
-# Install Google Cloud SDK
-RUN curl -O https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-455.0.0-linux-x86_64.tar.gz && \
-    tar -xf google-cloud-cli-455.0.0-linux-x86_64.tar.gz && \
-    rm google-cloud-cli-455.0.0-linux-x86_64.tar.gz && \
-    ./google-cloud-sdk/install.sh --quiet --path-update=false --command-completion=false --usage-reporting=false && \
-    ln -s /google-cloud-sdk/bin/gcloud /usr/local/bin/gcloud && \
-    gcloud --version
+        netcat-openbsd
 
 # Install kubectl
 RUN curl -LO "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/$(uname -m)/kubectl" && \
@@ -51,14 +37,20 @@ RUN mkdir -p \
         /etc/ssh \
         /etc/ssh/authorized_keys.d \
         /var/log \
-        /var/run/sshd && \
-    ssh-keygen -A && \
-    echo "PasswordAuthentication no" >> /etc/ssh/sshd_config && \
-    echo "ChallengeResponseAuthentication no" >> /etc/ssh/sshd_config && \
-    echo "PermitRootLogin no" >> /etc/ssh/sshd_config && \
-    adduser -D -h /home/udx -s /bin/bash udx && \
-    echo "udx ALL=(ALL) NOPASSWD: /usr/sbin/sshd" >> /etc/sudoers.d/udx && \
-    chown -R udx:udx /home/udx
+        /var/run/sshd \
+        /run/sshd \
+    && ssh-keygen -A \
+    && echo "PasswordAuthentication no" >> /etc/ssh/sshd_config \
+    && echo "ChallengeResponseAuthentication no" >> /etc/ssh/sshd_config \
+    && echo "PermitRootLogin no" >> /etc/ssh/sshd_config \
+    && adduser -D -h /home/udx -s /bin/bash udx \
+    && echo "udx ALL=(ALL) NOPASSWD: /usr/sbin/sshd" >> /etc/sudoers.d/udx \
+    && chown -R udx:udx /home/udx \
+    && chmod 755 /etc/ssh \
+    && chmod 755 /etc/ssh/authorized_keys.d \
+    && chmod 755 /var/log \
+    && chown -R udx:udx /var/log \
+    && chmod 777 /etc/ssh/authorized_keys.d
 
 # Set working directory and switch to non-root user
 WORKDIR /home/udx
@@ -74,11 +66,11 @@ RUN npm ci --only=production
 COPY --chown=udx:udx . .
 
 # Expose ports
-EXPOSE 3000 22
+EXPOSE 22 8080
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:3000/health || exit 1
+    CMD nc -z localhost 22 || exit 1
 
 # Start SSH daemon and application
 CMD ["/bin/bash", "-c", "sudo /usr/sbin/sshd && npm start"]
