@@ -36,7 +36,7 @@ services:
       retries: 3
     log_file: "/var/log/k8gate.log"
 
-  - name: "ssh_keys_sync"
+  - name: "ssh-keys-sync"
     command: "node /opt/sources/rabbitci/rabbit-ssh/bin/controller.keys.js"
     autostart: "${SERVICE_ENABLE_SSHD:-true}"
     autorestart: true
