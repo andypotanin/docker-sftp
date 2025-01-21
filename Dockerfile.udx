@@ -94,10 +94,10 @@ RUN mkdir -p \
     /home/udx/.worker && \
     ln -s /usr/bin/node /usr/local/bin/node && \
     chown -R udx:udx /home/udx && \
-    chmod -R 777 /home/udx/.cd/configs && \
-    chmod -R 777 /home/udx/.worker && \
-    chmod -R 777 /etc/worker && \
-    chown -R udx:udx /etc/worker
+    chmod 755 /home/udx/.cd/configs && \
+    chmod 755 /home/udx/.worker && \
+    chmod 755 /etc/worker && \
+    chown root:root /etc/worker
 
 # Set up SSH configuration
 COPY --chown=root:root static/etc/ssh/ /etc/ssh/
@@ -140,44 +140,40 @@ RUN mkdir -p /etc/worker/logs /etc/worker/configs && \
 
 # Copy and verify service configuration
 COPY --chown=root:root .github/workflows/services.yml /etc/worker/services.yml
-COPY --chown=root:root .github/workflows/services.yml /etc/worker/configs/services.yml
-RUN echo "Verifying service configuration..." \
-    && cat /etc/worker/services.yml \
-    && worker validate /etc/worker/services.yml
-
-# Verify worker configuration with detailed error handling
 RUN echo "Verifying worker configuration..." && \
-    echo "Configuration locations:" && \
+    echo "Configuration location:" && \
     ls -la /etc/worker/services.yml && \
-    ls -la /etc/worker/configs/services.yml && \
     echo "\nConfiguration contents:" && \
     cat /etc/worker/services.yml && \
-    echo "\nTesting worker binary..." && \
-    /usr/local/bin/worker --version && \
     echo "\nValidating services configuration..." && \
-    WORKER_DEBUG=true /usr/local/bin/worker validate /etc/worker/services.yml && \
+    WORKER_DEBUG=true DEBUG=worker:*,ssh:*,k8gate:* /usr/local/bin/worker validate /etc/worker/services.yml && \
     echo "Worker configuration validated successfully" || {
         echo "\nERROR: Worker configuration validation failed"
         echo "\nWorker debug output:"
-        WORKER_DEBUG=true /usr/local/bin/worker list
+        WORKER_DEBUG=true /usr/local/bin/worker list --debug
         echo "\nConfiguration file contents:"
         cat /etc/worker/services.yml
         echo "\nService status:"
-        WORKER_DEBUG=true /usr/local/bin/worker status || true
+        WORKER_DEBUG=true /usr/local/bin/worker status --debug || true
         echo "\nEnvironment variables:"
-        env | grep -E "WORKER_|SERVICE_|NODE_" || true
+        env | grep -E "WORKER_|SERVICE_|NODE_|DEBUG" || true
         exit 1
     }
 
+# Create config directory and copy services.yml there as well
+RUN mkdir -p /etc/worker/configs && \
+    cp /etc/worker/services.yml /etc/worker/configs/services.yml && \
+    chown root:root /etc/worker/configs/services.yml && \
+    chmod 644 /etc/worker/configs/services.yml
+
 # Set up worker configuration directories with proper permissions
-RUN mkdir -p /home/udx/.cd/configs /etc/worker && \
+RUN mkdir -p /home/udx/.cd/configs && \
     chown -R udx:udx /home/udx/.cd && \
     chmod -R 755 /home/udx/.cd/configs && \
-    chmod -R 755 /etc/worker && \
-    chown -R root:root /etc/worker && \
-    touch /home/udx/.cd/configs/merged_worker.yml && \
-    chown udx:udx /home/udx/.cd/configs/merged_worker.yml && \
-    chmod 644 /home/udx/.cd/configs/merged_worker.yml
+    chmod 644 /etc/worker/services.yml && \
+    chmod 644 /etc/worker/configs/services.yml && \
+    chown root:root /etc/worker/services.yml && \
+    chown root:root /etc/worker/configs/services.yml
 
 # Set up entrypoint scripts and permissions
 COPY --chown=root:root bin/entrypoint.sh /usr/local/bin/
