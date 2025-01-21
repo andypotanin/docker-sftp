@@ -133,10 +133,23 @@ ENV PATH $PATH:/usr/local/google-cloud-sdk/bin
 # Copy application files
 COPY --chown=udx:udx . /opt/sources/rabbitci/rabbit-ssh/
 
-# Set up worker configuration directories and permissions
-RUN mkdir -p /etc/worker/logs /etc/worker/configs && \
-    chown -R udx:udx /etc/worker && \
-    chmod -R 755 /etc/worker
+# Install worker binary and set up configuration
+RUN set -ex && \
+    # Download and verify worker binary
+    curl -L -o /usr/local/bin/worker https://github.com/usabilitydynamics/worker/releases/download/v0.8.0/worker-linux-x64 && \
+    chmod +x /usr/local/bin/worker && \
+    echo "Verifying worker binary installation..." && \
+    /usr/local/bin/worker --version && \
+    # Set up worker directories with proper permissions
+    mkdir -p /etc/worker/{logs,configs} && \
+    chown -R root:root /etc/worker && \
+    chmod 755 /etc/worker /etc/worker/logs /etc/worker/configs && \
+    # Verify worker binary is in PATH and executable
+    which worker && \
+    ls -l /usr/local/bin/worker && \
+    # Create test configuration to verify worker functionality
+    echo "version: \"1.0\"\nkind: \"worker\"\n\nservices:\n  - name: test\n    command: echo test" > /etc/worker/test.yml && \
+    WORKER_DEBUG=true /usr/local/bin/worker validate /etc/worker/test.yml
 
 # Copy and verify service configuration
 COPY --chown=root:root .github/workflows/services.yml /etc/worker/services.yml
