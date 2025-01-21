@@ -118,6 +118,8 @@ jobs:
           -e DEBUG=k8gate:*,api:*,auth:*,ssh:*,worker:* \
           -e SERVICE_ENABLE_K8S=false \
           -v ${PWD}/.github/workflows/services.yml:/etc/worker/services.yml:ro \
+          -v ${PWD}/static/etc/supervisor/supervisord.conf:/etc/supervisor/supervisord.conf:ro \
+          -v ${PWD}/static/etc/supervisor/services.conf:/etc/supervisor/conf.d/services.conf:ro \
           -e ACCESS_TOKEN=${ACCESS_TOKEN} \
           -e KUBERNETES_CLUSTER_ENDPOINT=${KUBERNETES_CLUSTER_ENDPOINT} \
           -e KUBERNETES_CLUSTER_NAME=${KUBERNETES_CLUSTER_NAME} \
@@ -148,6 +150,17 @@ jobs:
         # Start and verify supervisord services
         echo "Starting and verifying supervisord services..."
         docker exec test-container sh -c '
+          # Set up directories
+          mkdir -p /etc/supervisor/conf.d /var/log/supervisor /var/run
+          chmod 755 /etc/supervisor/conf.d /var/log/supervisor /var/run
+          
+          # Convert services configuration
+          echo "Converting services configuration..."
+          node /usr/local/bin/convert-services.js /etc/worker/services.yml /etc/supervisor/conf.d/services.conf
+          
+          echo "Generated supervisord configuration:"
+          cat /etc/supervisor/conf.d/services.conf
+          
           echo "Starting supervisord..."
           supervisord -c /etc/supervisor/supervisord.conf
           sleep 5
