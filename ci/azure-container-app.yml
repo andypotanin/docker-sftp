@@ -1,0 +1,53 @@
+apiVersion: containerapp.azure.com/v1alpha1
+kind: ContainerApp
+metadata:
+  name: docker-sftp
+  location: eastus  # Replace with your desired Azure region
+spec:
+  configuration:
+    activeRevisionsMode: single
+    ingress:
+      external: true
+      targetPort: 22
+      additionalPorts:
+        - name: api
+          port: 8080
+          external: true
+    networking:
+      vnetConfiguration:
+        internal: false
+        infrastructureSubnetId: ${AZURE_VNET_SUBNET_ID}  # Will be replaced during deployment
+  template:
+    containers:
+      - name: sftp
+        image: ${DOCKER_REGISTRY}/docker-sftp:latest  # Will be replaced during deployment
+        env:
+          - name: NODE_ENV
+            value: "production"
+          - name: SERVICE_ENABLE_SSHD
+            value: "true"
+          - name: SERVICE_ENABLE_API
+            value: "true"
+          - name: SERVICE_ENABLE_FIREBASE
+            value: "false"
+          - name: NODE_PORT
+            value: "8080"
+        resources:
+          cpu: 1.0
+          memory: "2Gi"
+        probes:
+          - type: liveness
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 30
+          - type: readiness
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+    scale:
+      minReplicas: 1
+      maxReplicas: 1  # SFTP requires stable connections, so we keep it at 1

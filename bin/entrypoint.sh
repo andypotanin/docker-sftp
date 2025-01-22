@@ -17,11 +17,11 @@ if [[ -f "/etc/ssh/ssh_host_dsa_key" ]]; then
 fi;
 
 if [[ "${KUBERNETES_CLUSTER_CERTIFICATE}" != "" ]]; then
-  echo "Writing Kubernetes certificate to [/home/node/.kube/kuberentes-ca.crt]";
-  cat /var/run/secrets/kubernetes.io/serviceaccount/ca.crt > /home/node/.kube/kuberentes-ca.crt
+  echo "Writing Kubernetes certificate to [/home/udx/.kube/kuberentes-ca.crt]";
+  cat /var/run/secrets/kubernetes.io/serviceaccount/ca.crt > /home/udx/.kube/kuberentes-ca.crt
 fi;
 
-if [[ -f /home/node/.kube/kuberentes-ca.crt ]]; then
+if [[ -f /home/udx/.kube/kuberentes-ca.crt ]]; then
   echo "Setting up Kubernetes [$KUBERNETES_CLUSTER_NAME] cluster with [$KUBERNETES_CLUSTER_NAMESPACE] namespace.";
 
   kubectl config set-cluster ${KUBERNETES_CLUSTER_NAME} \
@@ -38,9 +38,9 @@ if [[ -f /home/node/.kube/kuberentes-ca.crt ]]; then
 
   kubectl config use-context ${KUBERNETES_CLUSTER_NAMESPACE}
 
-  cp /root/.kube/config /home/node/.kube/config
+  cp /root/.kube/config /home/udx/.kube/config
 
-  chown -R node:node /home/node/.kube
+  chown -R udx:udx /home/udx/.kube
 
 fi;
 

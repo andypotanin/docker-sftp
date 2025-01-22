@@ -1,4 +1,4 @@
-FROM node:23.5-alpine
+FROM usabilitydynamics/udx-worker-nodejs:latest
 ENV KUBECTL_VERSION=1.32.0
 ENV NODE_ENV=production
 ENV SERVICE_ENABLE_SSHD=true
@@ -53,7 +53,7 @@ RUN \
   npm -g install pm2
 
 RUN \
-  mkdir -p /home/node/.kube && \
+  mkdir -p /home/udx/.kube && \
   mkdir -p /opt/sources/rabbitci/rabbit-ssh && \
   mkdir -p /root/.ssh
 
@@ -64,16 +64,17 @@ COPY static/etc/ssh/ /etc/ssh/
 WORKDIR /opt/sources/rabbitci/rabbit-ssh
 
 RUN \
-    chown node:node /opt/sources/rabbitci/rabbit-ssh/bin/controller.ssh.entrypoint.sh && \
+    chown udx:udx /opt/sources/rabbitci/rabbit-ssh/bin/controller.ssh.entrypoint.sh && \
     chmod +x /opt/sources/rabbitci/rabbit-ssh/bin/controller.ssh.entrypoint.sh && \
     touch /var/log/sshd.log && \
-    chown node:node /var/log/sshd.log && \
-    chown -R node:node /home/node
+    chown udx:udx /var/log/sshd.log && \
+    chown -R udx:udx /home/udx
 
 VOLUME [ "/etc/ssh/authorized_keys.d" ]
 
 ENTRYPOINT ["/opt/sources/rabbitci/rabbit-ssh/bin/entrypoint.sh"]
 
 EXPOSE 22
+EXPOSE 8080
 
 CMD [ "/usr/local/bin/node", "/usr/local/bin/pm2", "logs" ]
