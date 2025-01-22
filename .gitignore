@@ -21,4 +21,4 @@ docker-compose.yml
 # Ignore generated credentials from google-github-actions/auth
 gha-creds-*.json
 
-node_modules
+node_modulespackage-lock.json
