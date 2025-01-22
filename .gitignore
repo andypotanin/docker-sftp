@@ -1,25 +1,2 @@
-# General
-.DS_Store
-.AppleDouble
-.LSOverride
-
-# Thumbnails
-._*
-
-# Directories potentially created on remote AFP share
-.AppleDB
-.AppleDesktop
-Network Trash Folder
-Temporary Items
-.apdisk
-/tmp
-/newrelic_agent.log
-.idea
-static/kuberentes-ca.crt
-docker-compose.yml
-
-# Ignore generated credentials from google-github-actions/auth
-gha-creds-*.json
-
-node_modulespackage-lock.json
 node_modules/
+package-lock.json
